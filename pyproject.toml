@@ -8,7 +8,9 @@ dependencies = [
     "zulip",
     "python-dotenv",
     "click",
-    "rich"
+    "rich",
+    "anthropic",
+    "toml"
 ]
 
 [project.optional-dependencies]
