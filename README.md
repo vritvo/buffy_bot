@@ -23,6 +23,7 @@ A simple tool to extract conversations from Zulip and save them for further proc
    ZULIP_API_KEY=your-actual-api-key-here
    ZULIP_SITE_URL=https://your-zulip-instance.com
    ZULIP_EMAIL=your-email@example.com
+   CLAUDE_API_KEY=your-claude-api-key-here
    ```
 
 3. **Get your Zulip API key:**
@@ -39,6 +40,13 @@ A simple tool to extract conversations from Zulip and save them for further proc
    - Copy the email address shown
    - Add it to your `.env` file as the value for `ZULIP_EMAIL`
 
+5. **Get your Claude API key:**
+   - Go to [Claude Console](https://console.anthropic.com/)
+   - Sign in or create an account
+   - Navigate to "API Keys" in your account settings
+   - Click "Create Key" and copy the generated key
+   - Add it to your `.env` file as the value for `CLAUDE_API_KEY`
+
 ## Usage
 
 ### Extract from Stream Topic
@@ -51,9 +59,21 @@ python main.py extract-stream --stream "general" --topic "daily-checkin" --limit
 python main.py extract-private --users "user1@example.com,user2@example.com" --limit 1000
 ```
 
+### Generate Academic Paper
+```bash
+python main.py generate-paper --conversation "conversations/private_conversation.json" --topic "Nietzschean values in Buffy's Gingerbread"
+```
+
 ## Options
 
+### For Message Extraction
 - `--limit`: Maximum number of messages to extract (default: 1000)
+- `--output`: Custom output filename (optional)
+
+### For Paper Generation
+- `--conversation`: Path to conversation JSON file (required)
+- `--topic`: Paper topic/thesis statement (required)
+- `--prompt-type`: Type of system prompt (`default` or `buffy`, default: `default`)
 - `--output`: Custom output filename (optional)
 
 ## Output Format
@@ -98,3 +118,31 @@ python main.py extract-private --users "kettelhoit@gmail.com" --limit 1000
 ```
 
 This will save the conversation to `conversations/private_conversation.json` ready for further processing.
+
+### Generate a paper from your conversation
+Once you have extracted the conversation, generate an academic paper:
+
+```bash
+python main.py generate-paper --conversation "conversations/private_conversation.json" --topic "Nietzschean values in Buffy's Gingerbread" --prompt-type "buffy"
+```
+
+## Paper Generation Features
+
+- **Multiple prompt types**: Choose between `default` (general academic writing) or `buffy` (specialized for Buffy analysis with philosophical theory)
+- **Configurable prompts**: Edit `prompts.toml` to customize the system prompts
+- **Automatic formatting**: Papers are saved as Markdown files with metadata headers
+- **Smart filenames**: Output files include timestamp, source conversation, and topic
+- **Preview**: Shows a preview of the generated paper in the terminal
+
+### System Prompts
+
+The tool includes two preconfigured system prompts:
+
+1. **`default`**: General academic writing focused on media studies and cultural analysis
+2. **`buffy`**: Specialized for Buffy the Vampire Slayer analysis, including expertise in:
+   - Nietzschean and Freudian theory
+   - Feminist and queer studies
+   - Buffy scholarship and character analysis
+   - Symbolic and metaphorical interpretation
+
+You can customize these prompts by editing the `prompts.toml` file.
