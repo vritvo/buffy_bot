@@ -22,12 +22,9 @@ console = Console()
 @dataclass
 class Message:
     """Simple message data structure"""
-    id: int
     content: str
     sender: str
     timestamp: str
-    stream_name: Optional[str] = None
-    topic: Optional[str] = None
 
 
 class ZulipExtractor:
@@ -121,12 +118,9 @@ site = {site_url}
                     continue
                 
                 message = Message(
-                    id=msg['id'],
                     content=msg['content'],
                     sender=msg.get('sender_full_name', 'Unknown'),
-                    timestamp=msg['timestamp'],
-                    stream_name=stream_name,
-                    topic=topic
+                    timestamp=msg['timestamp']
                 )
                 messages.append(message)
         
@@ -160,7 +154,6 @@ site = {site_url}
                     continue
                 
                 message = Message(
-                    id=msg['id'],
                     content=msg['content'],
                     sender=msg.get('sender_full_name', 'Unknown'),
                     timestamp=msg['timestamp']

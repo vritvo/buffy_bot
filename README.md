@@ -70,12 +70,9 @@ Messages are saved as JSON files in the `conversations/` directory with this str
   },
   "messages": [
     {
-      "id": 12345,
       "content": "Hello world!",
       "sender": "John Doe",
-      "timestamp": 1704110400,
-      "stream_name": "general",
-      "topic": "daily-checkin"
+      "timestamp": 1704110400
     }
   ]
 }
@@ -85,7 +82,7 @@ Messages are saved as JSON files in the `conversations/` directory with this str
 
 - ✅ Text messages with full content (including markdown)
 - ✅ User names and timestamps
-- ✅ Stream/topic information (for stream messages)
+- ❌ Message IDs, stream/topic information, and other metadata
 - ❌ System messages
 - ❌ File uploads
 - ❌ Images
