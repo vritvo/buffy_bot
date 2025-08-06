@@ -1,0 +1,19 @@
+[project]
+name = "buffy-bot"
+version = "0.1.0"
+description = "Zulip conversation extractor and paper generator"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "zulip",
+    "python-dotenv",
+    "click",
+    "rich"
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "black",
+    "flake8"
+]
