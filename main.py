@@ -203,7 +203,16 @@ site = {site_url}
                 # Remove HTML tags if present (Zulip messages can have HTML)
                 import re
                 content = re.sub(r'<[^>]+>', '', content)
-                content_lines.append(content)
+                
+                # Replace quoted message headers (e.g., "NAME said:") with generic text
+                # This replaces lines that match the pattern of "NAME said:" with "Quoting the following text:"
+                content = re.sub(r'^[^:]+\s+said:\s*', 'Quoting the following text:\n', content, flags=re.MULTILINE)
+                
+                # Clean up any remaining empty lines at the start
+                content = content.strip()
+                
+                if content:  # Only add if there's still content after cleaning
+                    content_lines.append(content)
         
         # Save TXT file
         with open(txt_path, 'w', encoding='utf-8') as f:
@@ -284,7 +293,16 @@ site = {site_url}
                     # Remove HTML tags if present
                     import re
                     content = re.sub(r'<[^>]+>', '', content)
-                    content_lines.append(content)
+                    
+                    # Replace quoted message headers (e.g., "NAME said:") with generic text
+                    # This replaces lines that match the pattern of "NAME said:" with "Quoting the following text:"
+                    content = re.sub(r'^[^:]+\s+said:\s*', 'Quoting the following text:\n', content, flags=re.MULTILINE)
+                    
+                    # Clean up any remaining empty lines at the start
+                    content = content.strip()
+                    
+                    if content:  # Only add if there's still content after cleaning
+                        content_lines.append(content)
             
             # Add week header
             week_end = week_start + timedelta(days=7)
