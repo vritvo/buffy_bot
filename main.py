@@ -323,6 +323,19 @@ class PaperGenerator:
         
         return config[prompt_type]["system_prompt"]
     
+    def load_model_config(self) -> str:
+        """Load paper generation model from configuration file"""
+        config_path = Path("prompts.toml")
+        if not config_path.exists():
+            raise FileNotFoundError("prompts.toml configuration file not found")
+        
+        config = toml.load(config_path)
+        if 'models' not in config or 'paper_generation' not in config['models']:
+            # Fallback to default model if not configured
+            return "claude-sonnet-4-20250514"
+        
+        return config['models']['paper_generation']
+    
     def load_conversation(self, conversation_file: str) -> str:
         """Load conversation from TXT file for Claude"""
         file_path = Path(conversation_file)
@@ -363,6 +376,9 @@ class PaperGenerator:
         console.print(f"[blue]Loading system prompt: {prompt_type}[/blue]")
         system_prompt = self.load_system_prompt(prompt_type)
         
+        console.print(f"[blue]Loading model configuration[/blue]")
+        model = self.load_model_config()
+        
         user_prompt = f"""Please write an academic paper on the topic: "{topic}"
 
 Based on the following chat transcript:
@@ -371,11 +387,11 @@ Based on the following chat transcript:
 
 The paper should be well-structured, insightful, and grounded in the evidence and discussion from the transcript."""
         
-        console.print("[yellow]Sending request to Claude...[/yellow]")
+        console.print(f"[yellow]Sending request to Claude using model: {model}[/yellow]")
         
         try:
             response = self.client.messages.create(
-                model="claude-3-5-sonnet-20241022",
+                model=model,
                 max_tokens=4000,
                 system=system_prompt,
                 messages=[
@@ -390,7 +406,7 @@ The paper should be well-structured, insightful, and grounded in the evidence an
         except Exception as e:
             raise Exception(f"Failed to generate paper with Claude: {e}")
     
-    def save_paper(self, content: str, topic: str, conversation_file: str, topic_shorthand: str = None) -> Path:
+    def save_paper(self, content: str, topic: str, conversation_file: str, topic_shorthand: str = None, model: str = None) -> Path:
         """Save generated paper to a file"""
         # Use provided shorthand or fallback to a simple default
         if topic_shorthand:
@@ -410,11 +426,14 @@ The paper should be well-structured, insightful, and grounded in the evidence an
         output_path = self.output_dir / filename
         
         # Add metadata header to the paper
+        if model is None:
+            model = self.load_model_config()
+        
         metadata = f"""---
 title: "{topic}"
 source_conversation: "{conversation_file}"
 generated_at: "{datetime.now().isoformat()}"
-model: "claude-3-5-sonnet-20241022"
+model: "{model}"
 ---
 
 """
@@ -425,6 +444,82 @@ model: "claude-3-5-sonnet-20241022"
             f.write(full_content)
         
         return output_path
+    
+    def generate_paper_from_notes(self, notes_folder: str, topic: str, prompt_type: str = "default") -> str:
+        """Generate a paper using Claude based on filtered grad bot notes"""
+        
+        notes_path = Path(notes_folder)
+        if not notes_path.exists():
+            raise FileNotFoundError(f"Notes folder not found: {notes_folder}")
+        
+        console.print(f"[blue]Loading grad bot notes from: {notes_folder}[/blue]")
+        
+        # Find all markdown files in the notes folder
+        note_files = sorted([f for f in notes_path.glob("*.md")])
+        
+        if not note_files:
+            raise FileNotFoundError(f"No markdown note files found in: {notes_folder}")
+        
+        console.print(f"[blue]Found {len(note_files)} note files[/blue]")
+        
+        # Combine all the filtered conversations and notes
+        combined_content = []
+        combined_content.append("=== FILTERED CONVERSATION NOTES ===\n")
+        
+        for note_file in note_files:
+            with open(note_file, 'r', encoding='utf-8') as f:
+                content = f.read().strip()
+            
+            # Extract just the content after the metadata header
+            if "---" in content:
+                # Split on the second occurrence of "---" to skip the metadata
+                parts = content.split("---", 2)
+                if len(parts) >= 3:
+                    main_content = parts[2].strip()
+                else:
+                    main_content = content
+            else:
+                main_content = content
+            
+            combined_content.append(f"\n=== WEEK: {note_file.stem} ===\n")
+            combined_content.append(main_content)
+            combined_content.append("\n" + "="*50 + "\n")
+        
+        combined_content.append("\n=== END FILTERED NOTES ===")
+        transcript = "\n".join(combined_content)
+        
+        console.print(f"[blue]Loading system prompt: {prompt_type}[/blue]")
+        system_prompt = self.load_system_prompt(prompt_type)
+        
+        console.print(f"[blue]Loading model configuration[/blue]")
+        model = self.load_model_config()
+        
+        user_prompt = f"""Please write an academic paper on the topic: "{topic}"
+
+Based on the following filtered conversation notes that have been analyzed and curated by research assistants:
+
+{transcript}
+
+The paper should be well-structured, insightful, and grounded in the evidence and analysis from the filtered notes. Use the exact quotes and theoretical frameworks identified in the notes to support your arguments."""
+        
+        console.print(f"[yellow]Sending request to Claude using model: {model}[/yellow]")
+        
+        try:
+            response = self.client.messages.create(
+                model=model,
+                max_tokens=4000,
+                system=system_prompt,
+                messages=[
+                    {"role": "user", "content": user_prompt}
+                ]
+            )
+            
+            paper_content = response.content[0].text
+            console.print(f"[green]✓ Paper generated from notes ({len(paper_content)} characters)[/green]")
+            return paper_content
+            
+        except Exception as e:
+            raise Exception(f"Failed to generate paper from notes with Claude: {e}")
 
 
 class GradBot:
@@ -468,6 +563,32 @@ Remember to:
         
         return system_prompt, user_prompt
     
+    def load_grad_bot_model_config(self) -> str:
+        """Load grad bot model from configuration file"""
+        config_path = Path("prompts.toml")
+        if not config_path.exists():
+            raise FileNotFoundError("prompts.toml configuration file not found")
+        
+        config = toml.load(config_path)
+        if 'models' not in config or 'grad_bot' not in config['models']:
+            # Fallback to default model if not configured
+            return "claude-sonnet-4-20250514"
+        
+        return config['models']['grad_bot']
+    
+    def load_grad_bot_api_settings(self) -> dict:
+        """Load grad bot API settings from configuration file"""
+        config_path = Path("prompts.toml")
+        if not config_path.exists():
+            raise FileNotFoundError("prompts.toml configuration file not found")
+        
+        config = toml.load(config_path)
+        
+        return {
+            'temperature': config['api_settings']['grad_bot_temperature'],
+            'max_tokens': config['api_settings']['grad_bot_max_tokens']
+        }
+    
     def analyze_weekly_chunk(self, weekly_file: str, paper_topic: str, prompt_type: str = "grad_bot_default") -> str:
         """Analyze a weekly conversation chunk and extract relevant content"""
         
@@ -487,14 +608,20 @@ Remember to:
         # Load system and user prompts
         system_prompt, user_prompt_template = self.load_grad_bot_prompts(prompt_type)
         
+        # Load model configuration and API settings
+        model = self.load_grad_bot_model_config()
+        api_settings = self.load_grad_bot_api_settings()
+        
+        
         # Substitute variables in user prompt
         user_prompt = user_prompt_template.replace("{{PAPER_TOPIC}}", paper_topic)
         user_prompt = user_prompt.replace("{{CONVERSATION_TRANSCRIPT}}", weekly_content)
         
         try:
             response = self.client.messages.create(
-                model="claude-3-5-sonnet-20241022",
-                max_tokens=3000,
+                model=model,
+                max_tokens=api_settings['max_tokens'],
+                temperature=api_settings['temperature'],
                 system=system_prompt,
                 messages=[
                     {"role": "user", "content": user_prompt}
@@ -508,11 +635,17 @@ Remember to:
         except Exception as e:
             raise Exception(f"Failed to analyze weekly chunk with Claude: {e}")
     
-    def save_grad_notes(self, analysis: str, weekly_file: str, paper_topic: str, topic_shorthand: str = None) -> Path:
-        """Save grad bot analysis to a file"""
+    def save_grad_notes(self, analysis: str, weekly_file: str, paper_topic: str, topic_shorthand: str = None, topic_folder_path: Path = None, model: str = None) -> Path:
+        """Save grad bot analysis to a file in a topic-specific folder"""
         # Extract week identifier from filename
         week_file = Path(weekly_file)
         week_name = week_file.stem  # e.g., "private_conversation_week_2024-01-07"
+        
+        # Extract just the week part for the filename (e.g., "week_2024-01-07")
+        if "week_" in week_name:
+            week_part = week_name.split("week_", 1)[1]  # Get everything after "week_"
+        else:
+            week_part = week_name
         
         # Use provided shorthand or fallback to a simple default
         if topic_shorthand:
@@ -524,17 +657,28 @@ Remember to:
             topic_words = paper_topic.split()[:3]
             safe_shorthand = "_".join(word for word in topic_words if word.isalnum())[:30]
         
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        filename = f"{timestamp}_{week_name}_{safe_shorthand}_notes.md"
+        # Use provided topic folder or create a new one
+        if topic_folder_path is None:
+            # Create topic-specific folder with format: <shorthand>_<timestamp>
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            topic_folder_name = f"{safe_shorthand}_{timestamp}"
+            topic_folder_path = self.output_dir / topic_folder_name
+            topic_folder_path.mkdir(exist_ok=True)
         
-        output_path = self.output_dir / filename
+        # Filename is just the week identifier
+        filename = f"{week_part}.md"
+        
+        output_path = topic_folder_path / filename
         
         # Add metadata header
+        if model is None:
+            model = self.load_grad_bot_model_config()
+        
         metadata = f"""---
 paper_topic: "{paper_topic}"
 source_week: "{weekly_file}"
 analyzed_at: "{datetime.now().isoformat()}"
-model: "claude-3-5-sonnet-20241022"
+model: "{model}"
 grad_bot_type: "research_assistant"
 ---
 
@@ -569,6 +713,24 @@ grad_bot_type: "research_assistant"
         
         console.print(f"[blue]Found {len(weekly_files)} weekly files to process[/blue]")
         
+        # Create single topic-specific folder for this entire run
+        if topic_shorthand:
+            # Clean the shorthand to be filesystem-safe
+            safe_shorthand = "".join(c for c in topic_shorthand if c.isalnum() or c in (' ', '-', '_')).rstrip()
+            safe_shorthand = safe_shorthand.replace(' ', '_')
+        else:
+            # Fallback: use first few words if no shorthand provided
+            topic_words = paper_topic.split()[:3]
+            safe_shorthand = "_".join(word for word in topic_words if word.isalnum())[:30]
+        
+        # Create topic-specific folder with format: <shorthand>_<timestamp>
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        topic_folder_name = f"{safe_shorthand}_{timestamp}"
+        topic_folder_path = self.output_dir / topic_folder_name
+        topic_folder_path.mkdir(exist_ok=True)
+        
+        console.print(f"[blue]Creating topic folder: {topic_folder_path}[/blue]")
+        
         results = []
         
         with Progress(
@@ -584,8 +746,11 @@ grad_bot_type: "research_assistant"
                     # Analyze the weekly chunk
                     analysis = self.analyze_weekly_chunk(str(weekly_file), paper_topic, prompt_type)
                     
-                    # Save the analysis
-                    output_path = self.save_grad_notes(analysis, str(weekly_file), paper_topic, topic_shorthand)
+                    # Get model for metadata
+                    model = self.load_grad_bot_model_config()
+                    
+                    # Save the analysis to the shared topic folder
+                    output_path = self.save_grad_notes(analysis, str(weekly_file), paper_topic, topic_shorthand, topic_folder_path, model)
                     
                     results.append({
                         'week_file': str(weekly_file),
@@ -609,7 +774,7 @@ grad_bot_type: "research_assistant"
         successful = sum(1 for r in results if r['success'])
         console.print(f"\n[green]Grad bot analysis complete![/green]")
         console.print(f"[blue]Successfully processed: {successful}/{len(weekly_files)} weeks[/blue]")
-        console.print(f"[blue]Notes saved to: {self.output_dir}[/blue]")
+        console.print(f"[blue]Notes saved to: {topic_folder_path}[/blue]")
         
         return results
 
@@ -671,6 +836,10 @@ def extract_private(users, limit, output, weekly_chunks):
         console.print("[red]Error: ZULIP_API_KEY and ZULIP_SITE_URL must be set in environment variables[/red]")
         return
     
+    if not users:
+        console.print("[red]Error: --users is required[/red]")
+        return
+    
     user_emails = [email.strip() for email in users.split(',')]
     email = os.getenv('ZULIP_EMAIL')
     extractor = ZulipExtractor(api_key, site_url, email)
@@ -729,6 +898,9 @@ def generate_paper(conversation, topic, prompt_type, output, topic_shorthand):
             paper_content = generator.generate_paper(conversation, topic, prompt_type)
             progress.update(task, description="Saving paper...")
             
+            # Get model for metadata
+            model = generator.load_model_config()
+            
             # Save the paper
             if output:
                 # If custom output provided, use it
@@ -737,11 +909,21 @@ def generate_paper(conversation, topic, prompt_type, output, topic_shorthand):
                     output_path = output_path.with_suffix('.md')
                 output_path.parent.mkdir(exist_ok=True)
                 
+                # Add metadata header
+                metadata = f"""---
+title: "{topic}"
+source_conversation: "{conversation}"
+generated_at: "{datetime.now().isoformat()}"
+model: "{model}"
+---
+
+"""
+                
                 with open(output_path, 'w', encoding='utf-8') as f:
-                    f.write(paper_content)
+                    f.write(metadata + paper_content)
             else:
                 # Use automatic filename
-                output_path = generator.save_paper(paper_content, topic, conversation, topic_shorthand)
+                output_path = generator.save_paper(paper_content, topic, conversation, topic_shorthand, model)
             
             progress.update(task, description=f"Paper saved!")
             console.print(f"[green]✓ Paper saved to: {output_path}[/green]")
@@ -800,6 +982,97 @@ def run_grad_bots(weekly_dir, topic, prompt_type, topic_shorthand):
         
     except Exception as e:
         console.print(f"[red]Error: {e}[/red]")
+
+
+@cli.command()
+@click.option('--notes-folder', required=True, help='Path to folder containing grad bot notes (e.g., grad_notes/nietzsche_20250107_120000)')
+@click.option('--topic', required=True, help='Paper topic/thesis')
+@click.option('--prompt-type', default='default', help='Type of system prompt to use (default, buffy)')
+@click.option('--output', help='Custom output filename (optional)')
+def generate_paper_from_notes(notes_folder, topic, prompt_type, output):
+    """Generate an academic paper from filtered grad bot notes using Claude"""
+    claude_api_key = os.getenv('CLAUDE_API_KEY')
+    
+    if not claude_api_key:
+        console.print("[red]Error: CLAUDE_API_KEY must be set in environment variables[/red]")
+        console.print("[yellow]Add CLAUDE_API_KEY=your-api-key to your .env file[/yellow]")
+        return
+    
+    generator = PaperGenerator(claude_api_key)
+    
+    with Progress(
+        SpinnerColumn(),
+        TextColumn("[progress.description]{task.description}"),
+        console=console
+    ) as progress:
+        task = progress.add_task("Generating paper from notes...", total=None)
+        
+        try:
+            # Generate the paper from notes
+            paper_content = generator.generate_paper_from_notes(notes_folder, topic, prompt_type)
+            progress.update(task, description="Saving paper...")
+            
+            # Save the paper
+            if output:
+                # If custom output provided, use it
+                output_path = Path("papers") / output
+                if not output.endswith('.md'):
+                    output_path = output_path.with_suffix('.md')
+                output_path.parent.mkdir(exist_ok=True)
+                
+                # Get model for metadata
+                model = generator.load_model_config()
+                
+                # Add metadata header
+                metadata = f"""---
+title: "{topic}"
+source_notes: "{notes_folder}"
+generated_at: "{datetime.now().isoformat()}"
+model: "{model}"
+generation_method: "filtered_notes"
+---
+
+"""
+                
+                with open(output_path, 'w', encoding='utf-8') as f:
+                    f.write(metadata + paper_content)
+            else:
+                # Use automatic filename based on notes folder
+                notes_path = Path(notes_folder)
+                folder_name = notes_path.name  # e.g., "nietzsche_20250107_120000"
+                
+                timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+                filename = f"{timestamp}_paper_from_{folder_name}.md"
+                output_path = Path("papers") / filename
+                output_path.parent.mkdir(exist_ok=True)
+                
+                # Get model for metadata
+                model = generator.load_model_config()
+                
+                # Add metadata header
+                metadata = f"""---
+title: "{topic}"
+source_notes: "{notes_folder}"
+generated_at: "{datetime.now().isoformat()}"
+model: "{model}"
+generation_method: "filtered_notes"
+---
+
+"""
+                
+                with open(output_path, 'w', encoding='utf-8') as f:
+                    f.write(metadata + paper_content)
+            
+            progress.update(task, description=f"Paper saved!")
+            console.print(f"[green]✓ Paper generated from notes and saved to: {output_path}[/green]")
+            
+            # Show a preview of the paper
+            console.print("\n[blue]Paper preview:[/blue]")
+            preview = paper_content[:500] + "..." if len(paper_content) > 500 else paper_content
+            console.print(Markdown(preview))
+            
+        except Exception as e:
+            console.print(f"[red]Error: {e}[/red]")
 
 
 def main():
