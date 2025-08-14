@@ -23,6 +23,7 @@ A simple tool to extract conversations from Zulip and save them for further proc
    ZULIP_API_KEY=your-actual-api-key-here
    ZULIP_SITE_URL=https://your-zulip-instance.com
    ZULIP_EMAIL=your-email@example.com
+   ZULIP_RECIPIENT=other-email@example.com
    CLAUDE_API_KEY=your-claude-api-key-here
    ```
 
@@ -40,7 +41,12 @@ A simple tool to extract conversations from Zulip and save them for further proc
    - Copy the email address shown
    - Add it to your `.env` file as the value for `ZULIP_EMAIL`
 
-5. **Get your Claude API key:**
+5. **Set default recipient (optional):**
+   - If you frequently extract conversations with the same person, set `ZULIP_RECIPIENT` to their email
+   - This allows you to run `python main.py extract-private` without specifying `--users`
+   - You can still override this by providing `--users` when needed
+
+6. **Get your Claude API key:**
    - Go to [Claude Console](https://console.anthropic.com/)
    - Sign in or create an account
    - Navigate to "API Keys" in your account settings
@@ -56,11 +62,19 @@ python main.py extract-stream --stream "general" --topic "daily-checkin" --limit
 
 ### Extract from Private Conversation
 ```bash
+# Using ZULIP_RECIPIENT from environment (if set)
+python main.py extract-private --limit 1000
+
+# Or specify users explicitly
 python main.py extract-private --users "user1@example.com,user2@example.com" --limit 1000
 ```
 
 ### Extract with Weekly Chunks (for Multi-LLM Processing)
 ```bash
+# Using ZULIP_RECIPIENT from environment (if set)
+python main.py extract-private --limit 1000 --weekly-chunks
+
+# Or specify users explicitly
 python main.py extract-private --users "user1@example.com,user2@example.com" --limit 1000 --weekly-chunks
 ```
 
@@ -71,7 +85,12 @@ python main.py generate-paper --conversation "conversations/private_conversation
 
 ### Run Grad Bot Analysis on Weekly Chunks
 ```bash
-python main.py run-grad-bots --weekly-dir "conversations/weekly" --topic "Nietzschean values in Buffy's Gingerbread" --prompt-type "grad_bot_buffy"
+python main.py run-grad-bots --weekly-dir "conversations/weekly" --topic "This paper examines how Buffy the Vampire Slayer's episode "Gingerbread" (3.11), paired with "Amends" (3.10), functions as a sophisticated philosophical treatise that weaves together Nietzschean ethics, Freudian psychoanalysis, and feminist-queer theory" --prompt-type "grad_bot_buffy" --topic-shorthand "nietzsche"
+```
+
+### Generate Paper from Grad Bot Notes
+```bash
+python main.py generate-paper-from-notes --notes-folder "grad_notes/nietzsche_20250107_120000" --topic "This paper examines how Buffy the Vampire Slayer's episode "Gingerbread" (3.11), paired with "Amends" (3.10), functions as a sophisticated philosophical treatise that weaves together Nietzschean ethics, Freudian psychoanalysis, and feminist-queer theory" --prompt-type "buffy"
 ```
 
 ## Options
@@ -91,6 +110,13 @@ python main.py run-grad-bots --weekly-dir "conversations/weekly" --topic "Nietzs
 - `--weekly-dir`: Path to directory containing weekly chunk files (required)
 - `--topic`: Paper topic/thesis for analysis (required)
 - `--prompt-type`: Type of grad bot prompt (`grad_bot_default` or `grad_bot_buffy`, default: `grad_bot_default`)
+- `--topic-shorthand`: Short identifier for the topic (required, used in folder naming)
+
+### For Paper Generation from Notes
+- `--notes-folder`: Path to folder containing grad bot notes (required, e.g., `grad_notes/nietzsche_20250107_120000`)
+- `--topic`: Paper topic/thesis statement (required)
+- `--prompt-type`: Type of system prompt (`default` or `buffy`, default: `default`)
+- `--output`: Custom output filename (optional)
 
 ## Output Format
 
@@ -127,10 +153,10 @@ Messages are saved as JSON files in the `conversations/` directory with this str
 ## Examples
 
 ### Working with your conversation
-Based on your usage, to extract the conversation from your URL like `https://recurse.zulipchat.com/#narrow/dm/896241-frederic-kettelhoit-(he)-(F1'25)`, use:
+Based on your usage, to extract a conversation from a URL like `https://yourinstance.zulipchat.com/#narrow/dm/12345-user-name`, use:
 
 ```bash
-python main.py extract-private --users "kettelhoit@gmail.com" --limit 1000
+python main.py extract-private --users "colleague@example.com" --limit 1000
 ```
 
 This will save the conversation to `conversations/private_conversation.json` ready for further processing.
