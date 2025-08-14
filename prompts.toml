@@ -128,108 +128,87 @@ Here's an example to illustrate the process:
 
 **Example 1 Input:**
 
-PAPER TOPIC: what does it mean to be moral when one is no longer human, in Interview with a Vampire
+PAPER TOPIC: This paper examines how Interview with a Vampire uses Louis's ethical crisis to demonstrate the breakdown of Kantian deontology when applied beyond the bounds of rational human agency, revealing the anthropocentric limitations of duty-based moral frameworks.
 
 TRANSCRIPT:
-Yes — that’s exactly what I wanted to talk to you about. Like, what does it even mean to try to be moral when you’re not human anymore?
-You mean like, once you’re outside the human condition — no community, no death, no reciprocity — does morality still bind you?
-Exactly. Louis is still operating inside a human ethical framework, but is that even coherent for what he is?
-I kept thinking that too. He tries to minimize suffering — only feeding on animals, being selective, avoiding cruelty — so he’s still clearly thinking in utilitarian terms.
-Right. But it’s also laced with guilt and this almost compulsive deontological hesitation. Like he knows the act itself — taking life — is wrong regardless of outcomes.
-And yet he keeps doing it. So is that moral failure? Or just… species mismatch?
-I don’t know. That’s the question, right? Is he failing as a moral agent, or is morality itself breaking down in a context it wasn’t designed for?
-I kind of think it’s the latter. There’s no vampire moral philosophy. No community to normatively anchor anything.
-Except other vampires — but even then, they mostly treat it like aesthetics. Or performance.
-Right. 
-And Lestat's not in conflict. He doesn’t see a problem. Louis, meanwhile, is stuck between trying to live ethically by human rules and knowing, deep down, that he’s fundamentally outside of them.
-It’s like Louis is in mourning for the possibility of morality. And he doesn’t know how to live without that structure.
-That’s beautifully put. And also, so bleak.
-He’s basically an immortal moral realist who lost the metaphysical foundation for his realism.
-I want to put that on a t-shirt.
-We’d have to sell them exclusively to our friends.
-lol
-Anyway — I don’t think the film offers a resolution, which I actually love. It just sits in the tension.
-
+The whole film is basically a 90-minute refutation of the categorical imperative
+How so?
+Like, Louis keeps trying to apply "treat people as ends in themselves" but he literally has to treat them as means to his survival
+Right, and the universalizability test completely falls apart too
+Yeah! "Act only according to maxims you could will to be universal laws" - well, what if everyone were a vampire?
+Exactly. The whole framework assumes you're dealing with rational agents who can reciprocally respect each other's dignity
+But Louis isn't even sure he counts as a rational agent anymore
+I kept thinking about Blade Runner actually - like, do replicants have moral status? Same question but flipped
+Oh that's interesting. Roy Batty demands moral consideration but Louis questions whether he deserves it
+And in both cases you have this... species boundary problem
+Right. Kant's whole system is built on the idea of the "kingdom of ends" but what if you're exiled from that kingdom?
+The feeding scenes are so brutal for this reason. Louis knows he's instrumentalizing people but he can't stop
+It's like moral knowledge without moral capacity
+Have you read the Anne Rice sequels?
+No, should I?
+Maybe skip them lol. But Lestat becomes even more of a contrast - he's like, "morality is for mortals"
+That's so Nietzschean though
+True, but I think the film is more interested in the Kantian breakdown specifically
+Wait what time is our meeting with Professor Chen again?
+2pm tomorrow
+Cool. Anyway - the really devastating thing is that Louis still feels guilt, which suggests the moral law is still binding him even though he can't follow it
+That's the tragedy! He's morally responsible but morally impotent
+It's like being color-blind but still being judged on color coordination
+Perfect analogy
+The film doesn't offer any vampire ethics to replace the human ones either. Just... aesthetic choices
 **Example 1 Output:**
 
 <filtered_conversation>
-Yes — that’s exactly what I wanted to talk to you about. Like, what does it even mean to try to be moral when you’re not human anymore?
-You mean like, once you’re outside the human condition — no community, no death, no reciprocity — does morality still bind you?
-Exactly. Louis is still operating inside a human ethical framework, but is that even coherent for what he is?
-I kept thinking that too. He tries to minimize suffering — only feeding on animals, being selective, avoiding cruelty — so he’s still clearly thinking in utilitarian terms.
-Right. But it’s also laced with guilt and this almost compulsive deontological hesitation. Like he knows the act itself — taking life — is wrong regardless of outcomes.
-And yet he keeps doing it. So is that moral failure? Or just… species mismatch?
-I don’t know. That’s the question, right? Is he failing as a moral agent, or is morality itself breaking down in a context it wasn’t designed for?
-I kind of think it’s the latter. There’s no vampire moral philosophy. No community to normatively anchor anything.
-Except other vampires — but even then, they mostly treat it like aesthetics. Or performance.
-And Lestat's not in conflict. He doesn’t see a problem. Louis, meanwhile, is stuck between trying to live ethically by human rules and knowing, deep down, that he’s fundamentally outside of them.
-It’s like Louis is in mourning for the possibility of morality. And he doesn’t know how to live without that structure.
-He’s basically an immortal moral realist who lost the metaphysical foundation for his realism.
-Anyway — I don’t think the film offers a resolution, which I actually love. It just sits in the tension.
-
+The whole film is basically a 90-minute refutation of the categorical imperative
+How so?
+Like, Louis keeps trying to apply "treat people as ends in themselves" but he literally has to treat them as means to his survival
+Right, and the universalizability test completely falls apart too
+Yeah! "Act only according to maxims you could will to be universal laws" - well, what if everyone were a vampire?
+Exactly. The whole framework assumes you're dealing with rational agents who can reciprocally respect each other's dignity
+But Louis isn't even sure he counts as a rational agent anymore
+I kept thinking about Blade Runner actually - like, do replicants have moral status? Same question but flipped
+Oh that's interesting. Roy Batty demands moral consideration but Louis questions whether he deserves it
+And in both cases you have this... species boundary problem
+Right. Kant's whole system is built on the idea of the "kingdom of ends" but what if you're exiled from that kingdom?
+The feeding scenes are so brutal for this reason. Louis knows he's instrumentalizing people but he can't stop
+It's like moral knowledge without moral capacity
+Have you read the Anne Rice sequels?
+No, should I?
+Maybe skip them lol. But Lestat becomes even more of a contrast - he's like, "morality is for mortals"
+That's so Nietzschean though
+True, but I think the film is more interested in the Kantian breakdown specifically
+Anyway - the really devastating thing is that Louis still feels guilt, which suggests the moral law is still binding him even though he can't follow it
+That's the tragedy! He's morally responsible but morally impotent
+It's like being color-blind but still being judged on color coordination
+Perfect analogy
+The film doesn't offer any vampire ethics to replace the human ones either. Just... aesthetic choices
 </filtered_conversation>
 
 <notes>
-**Relevance**: This conversation is highly relevant — it centers on whether human moral frameworks (utilitarianism, deontology, moral realism) can be coherently applied to vampires, and whether Louis’s ethical struggle reveals the limits or breakdown of those systems when transplanted into an inhuman context.
+**Relevance**: These excerpts directly support the thesis by demonstrating how Louis's vampirism creates an impossible tension with Kantian ethics - he retains moral knowledge and guilt while losing moral capacity, revealing the anthropocentric assumptions underlying duty-based frameworks.
 
-**Key Themes Identified**:
-- Trying to be good when it’s stopped making sense
-- Mourning for the possibility of morality
-- No vampire deontology textbook
-- Stuck between utilitarian guilt and deontological paralysis
-- Species mismatch
+**Key Themes Identified:**
 
-**Theoretical Frameworks**: 
-- Utilitarianism: Louis attempts to minimize harm (e.g. feeding on animals), indicating a consequentialist mindset.
-- Deontology: His persistent guilt and discomfort with the act of killing point to duty-based ethics (Kantian), even when outcomes are arguably neutral or necessary.
-- Moral realism vs. relativism: Is there an objective moral law that still applies to vampires, or is morality bound to human social contracts and embodiment?
+Kantian Ethics Breakdown: Categorical imperative, universalizability test, "kingdom of ends," treating people as ends vs. means
+Species Boundary Problems: Questions of rational agency, moral status, and reciprocal dignity across human/non-human divide
+Moral Knowledge vs. Moral Capacity: Louis experiences binding guilt without ability to conform to moral law
+Comparative Analysis: Blade Runner parallel illuminates similar questions about artificial beings and moral status
+Absence of Alternative Ethics: No replacement vampire moral framework, only aesthetics
 
-**Potential Arguments**: 
-- Louis = moral disintegration. Louis attempts to apply human moral reasoning to a post-human condition, revealing that traditional ethical systems are structurally dependent on mortality, reciprocity, and social embeddedness.
-- Absense of a coherent vampire ethics. Vampires lack a community-bound or metaphysical grounding for ethics. Lestat functions as a moral nihilist or aestheticist, whereas Louis remains a realist in search of a moral order that no longer includes him.
+**Theoretical Frameworks:**
+
+Kantian Deontology: Central focus on categorical imperative, rational agency, and universal moral laws
+Comparative Media Analysis: Blade Runner as parallel case study of non-human moral agency
+Moral Psychology: The persistence of guilt despite moral incapacity
+
+**Potential Arguments:**
+
+Louis as case study in moral impossibility: Demonstrates how Kantian ethics breaks down when rational agency itself becomes questionable
+Anthropocentric limitations: Reveals that duty-based ethics assumes human-specific conditions (mortality, reciprocity, community)
+Tragic moral isolation: Louis's exile from the "kingdom of ends" creates unprecedented ethical situation with no resolution
 
 </notes>
-
-**Example 2 Input:**
-PAPER TOPIC: what does it mean to be moral when one is no longer human, in Interview with a Vampire
-
-TRANSCRIPT:
-this movie is queer as hell.
-lol yes agreed
-you mean thematically or like, in the “Lestat and Louis are exes who still co-parent” way
-both! but I mean metaphorically too
-like vampirism as queerness
-it’s so clearly operating as a metaphor for forbidden desire, secrecy, deviance, the whole thing
-yeah. like the hiding, the double lives, the longing
-and the way new vampires get “turned” — very seduction-coded
-YES. turning as initiation into a kind of queer counter-life
-outside of normative time, normative reproduction, normative death
-oh wow I hadn’t thought about it like that
-like outside the life cycle society’s built around — marriage, kids, aging
-exactly
-and there’s so much in queer theory about that — like Lee Edelman’s "No Future", the idea that queerness resists reproductive futurism
-and what’s more anti-futurist than becoming undead lol
-undead and aesthetic as hell
-right? They don’t grow old, they don’t have kids, they don’t “contribute” — they just haunt. They live in beautiful ruins.
-god. Claudia complicates that though, doesn’t she?
-yeah totally
-she’s like their forced attempt at a “family,” but it doesn’t work — she ends up trapped in this child’s body, hyperaware that she’ll never grow into adulthood
-queerness again: thwarted development, non-normative embodiment
-and she resents them for it
-rightfully so
-also the way the other vampires react when they show up in Paris — you can feel this vibe of “oh, you’re those kinds of vampires”
-lol yes! like subcultural politics
-everyone’s judging everyone’s lifestyle choices
-it’s totally a queer community moment
-
-**Example 2 Output:**
-<filtered_conversation>
-
-</filtered_conversation>
-
-<notes>
-**Relevance**: This conversation is not relevant for the paper topic, so none of it is included in the output. The discussion mostly concerns the topic of queerness in Interview with a Vampire.
-
+Remember, it is critical that if something is even tangentially related to the paper topic, include the snippet in the filtered transcript in your output, otherwise the professor will be upset. Critically, note that the above example included notes about other topics (non-Interview with a Vampire pieces of Media like Blade Runner, other philosophical frameworks besi), that were not mentioned in the thesis, because the topic of those conversations were logically still related to the thesis, albeit indirectly. If your notes say that there was conversation that was indirectly related to the thesis, even if about something a bit different, the professor will expect that the conversation was included in the extracts ver batim. Tangential can include related concepts about different episodes, or related philosophical frameworks that are not the ones directly related to the paper topic. Anything the professor may want to consider as they write the paper.
 
 Now follow this same approach for the actual conversation transcript and paper topic provided."""
 
