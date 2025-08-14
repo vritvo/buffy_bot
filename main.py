@@ -841,7 +841,7 @@ def extract_stream(stream, topic, limit, output):
 
 
 @cli.command()
-@click.option('--users', required=True, help='Comma-separated list of user emails')
+@click.option('--users', help='Comma-separated list of user emails (if not provided, uses default from env)')
 @click.option('--limit', default=1000, help='Maximum number of messages to extract')
 @click.option('--output', help='Output filename (default: private_conversation.json)')
 @click.option('--weekly-chunks', is_flag=True, help='Also split conversation into weekly chunks for multi-LLM processing')
@@ -854,9 +854,15 @@ def extract_private(users, limit, output, weekly_chunks):
         console.print("[red]Error: ZULIP_API_KEY and ZULIP_SITE_URL must be set in environment variables[/red]")
         return
     
+    # Load default users from environment variable if not provided
     if not users:
-        console.print("[red]Error: --users is required[/red]")
-        return
+        users = os.getenv('ZULIP_RECIPIENT')
+        if users:
+            console.print(f"[blue]Using default recipient from ZULIP_RECIPIENT environment variable[/blue]")
+        else:
+            console.print("[red]Error: No --users provided and ZULIP_RECIPIENT environment variable not set[/red]")
+            console.print("[yellow]Either provide --users or set ZULIP_RECIPIENT=email@example.com in your .env file[/yellow]")
+            return
     
     user_emails = [email.strip() for email in users.split(',')]
     email = os.getenv('ZULIP_EMAIL')
