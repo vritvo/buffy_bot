@@ -15,6 +15,7 @@ from dotenv import load_dotenv
 from anthropic import Anthropic
 
 from zulip import Client
+from grad_bot_logger import GradBotLogger
 
 # Load environment variables
 load_dotenv()
@@ -547,6 +548,7 @@ class GradBot:
         self.client = Anthropic(api_key=api_key)
         self.output_dir = Path("grad_notes")
         self.output_dir.mkdir(exist_ok=True)
+        self.logger = GradBotLogger()
     
     def load_grad_bot_prompts(self, prompt_type: str = "grad_bot_default") -> tuple[str, str]:
         """Load grad bot system and user prompts from configuration file"""
@@ -748,6 +750,22 @@ grad_bot_type: "research_assistant"
         topic_folder_path.mkdir(exist_ok=True)
         
         console.print(f"[blue]Creating topic folder: {topic_folder_path}[/blue]")
+        
+        # Log the grad bot execution with prompts and settings
+        system_prompt, user_prompt_template = self.load_grad_bot_prompts(prompt_type)
+        model = self.load_grad_bot_model_config()
+        api_settings = self.load_grad_bot_api_settings()
+        
+        prompt_hash = self.logger.log_grad_bot_execution(
+            system_prompt=system_prompt,
+            user_prompt_template=user_prompt_template,
+            model=model,
+            temperature=api_settings['temperature'],
+            max_tokens=api_settings['max_tokens'],
+            result_folder_name=topic_folder_name
+        )
+        
+        console.print(f"[blue]Logged grad bot run with prompt hash: {prompt_hash}[/blue]")
         
         results = []
         
