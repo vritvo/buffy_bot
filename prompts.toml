@@ -4,11 +4,11 @@
 # Default model for paper generation
 paper_generation = "claude-sonnet-4-20250514"
 # Default model for grad bot analysis
-grad_bot = "claude-3-5-sonnet-20241022"
+grad_bot = "claude-sonnet-4-20250514"
 
 [api_settings]
 # Temperature for grad bot analysis (0.0 = deterministic, 1.0 = creative)
-grad_bot_temperature = 1.0
+grad_bot_temperature = 0.7
 # Temperature for paper generation
 paper_generation_temperature = 0.7
 # Max tokens for grad bot analysis
@@ -208,7 +208,7 @@ Anthropocentric limitations: Reveals that duty-based ethics assumes human-specif
 Tragic moral isolation: Louis's exile from the "kingdom of ends" creates unprecedented ethical situation with no resolution
 
 </notes>
-Remember, it is critical that if something is even tangentially related to the paper topic, include the snippet in the filtered transcript in your output, otherwise the professor will be upset. Critically, note that the above example included notes about other topics (non-Interview with a Vampire pieces of Media like Blade Runner, other philosophical frameworks besi), that were not mentioned in the thesis, because the topic of those conversations were logically still related to the thesis, albeit indirectly. If your notes say that there was conversation that was indirectly related to the thesis, even if about something a bit different, the professor will expect that the conversation was included in the extracts ver batim. Tangential can include related concepts about different episodes, or related philosophical frameworks that are not the ones directly related to the paper topic. Anything the professor may want to consider as they write the paper.
+Remember, it is critical that if something is even tangentially related to the paper topic, include the snippet in the filtered transcript in your output, otherwise the professor will be upset. Critically, note that the above example included notes about other topics (non-Interview with a Vampire pieces of Media like Blade Runner, other philosophical frameworks), that were not mentioned in the thesis, because the topic of those conversations were logically still related to the thesis, albeit indirectly. If your notes say that there was conversation that was indirectly related to the thesis, even if about something a bit different, the professor will expect that the conversation was included in the extracts ver batim. Tangential can include related concepts about different episodes, or related philosophical frameworks that are not the ones directly related to the paper topic. Anything the professor may want to consider as they write the paper.
 
 Now follow this same approach for the actual conversation transcript and paper topic provided."""
 
