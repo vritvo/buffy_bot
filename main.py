@@ -550,7 +550,7 @@ class GradBot:
         self.output_dir.mkdir(exist_ok=True)
         self.logger = GradBotLogger()
     
-    def load_grad_bot_prompts(self, prompt_type: str = "grad_bot_default") -> tuple[str, str]:
+    def load_grad_bot_prompts(self, prompt_type: str = "grad_bot_buffy") -> tuple[str, str]:
         """Load grad bot system and user prompts from configuration file"""
         config_path = Path("prompts.toml")
         if not config_path.exists():
@@ -569,17 +569,11 @@ class GradBot:
             user_prompt = prompt_config["user_prompt"]
         else:
             # Fallback for old-style prompts that don't have separate user_prompt
-            user_prompt = """Paper topic: "{{PAPER_TOPIC}}"
-
-Please analyze the following weekly conversation transcript and extract relevant content for this paper topic:
+            user_prompt = """Please analyze the following weekly conversation transcript:
 
 {{CONVERSATION_TRANSCRIPT}}
 
-Remember to:
-- Extract EXACT quotes that are relevant to the paper topic
-- Provide brief analytical notes for each quote
-- Note if this week has little/no relevant content (that's perfectly fine)
-- Focus on substance and relevance over quantity"""
+Remember to maintain all important details while making it more concise and academic in tone."""
         
         return system_prompt, user_prompt
     
@@ -609,7 +603,7 @@ Remember to:
             'max_tokens': config['api_settings']['grad_bot_max_tokens']
         }
     
-    def analyze_weekly_chunk(self, weekly_file: str, paper_topic: str, prompt_type: str = "grad_bot_default") -> str:
+    def analyze_weekly_chunk(self, weekly_file: str, prompt_type: str = "grad_bot_buffy") -> str:
         """Analyze a weekly conversation chunk and extract relevant content"""
         
         file_path = Path(weekly_file)
@@ -634,8 +628,7 @@ Remember to:
         
         
         # Substitute variables in user prompt
-        user_prompt = user_prompt_template.replace("{{PAPER_TOPIC}}", paper_topic)
-        user_prompt = user_prompt.replace("{{CONVERSATION_TRANSCRIPT}}", weekly_content)
+        user_prompt = user_prompt_template.replace("{{CONVERSATION_TRANSCRIPT}}", weekly_content)
         
         try:
             response = self.client.messages.create(
@@ -655,7 +648,7 @@ Remember to:
         except Exception as e:
             raise Exception(f"Failed to analyze weekly chunk with Claude: {e}")
     
-    def save_grad_notes(self, analysis: str, weekly_file: str, paper_topic: str, topic_shorthand: str = None, topic_folder_path: Path = None, model: str = None) -> Path:
+    def save_grad_notes(self, analysis: str, weekly_file: str, topic_shorthand: str = None, topic_folder_path: Path = None, model: str = None) -> Path:
         """Save grad bot analysis to a file in a topic-specific folder"""
         # Extract week identifier from filename
         week_file = Path(weekly_file)
@@ -673,9 +666,8 @@ Remember to:
             safe_shorthand = "".join(c for c in topic_shorthand if c.isalnum() or c in (' ', '-', '_')).rstrip()
             safe_shorthand = safe_shorthand.replace(' ', '_')
         else:
-            # Fallback: use first few words if no shorthand provided
-            topic_words = paper_topic.split()[:3]
-            safe_shorthand = "_".join(word for word in topic_words if word.isalnum())[:30]
+            # Fallback: use a generic identifier if no shorthand provided
+            safe_shorthand = "grad_bot_analysis"
         
         # Use provided topic folder or create a new one
         if topic_folder_path is None:
@@ -695,7 +687,6 @@ Remember to:
             model = self.load_grad_bot_model_config()
         
         metadata = f"""---
-paper_topic: "{paper_topic}"
 source_week: "{weekly_file}"
 analyzed_at: "{datetime.now().isoformat()}"
 model: "{model}"
@@ -703,8 +694,6 @@ grad_bot_type: "research_assistant"
 ---
 
 # Grad Bot Analysis: {week_name}
-
-**Paper Topic:** {paper_topic}
 
 **Source:** {weekly_file}
 
@@ -718,7 +707,7 @@ grad_bot_type: "research_assistant"
         
         return output_path
 
-    def process_all_weekly_chunks(self, weekly_dir: str, paper_topic: str, prompt_type: str = "grad_bot_default", topic_shorthand: str = None):
+    def process_all_weekly_chunks(self, weekly_dir: str, prompt_type: str = "grad_bot_buffy", topic_shorthand: str = None):
         """Process all weekly chunks in a directory sequentially"""
         weekly_path = Path(weekly_dir)
         if not weekly_path.exists():
@@ -739,9 +728,8 @@ grad_bot_type: "research_assistant"
             safe_shorthand = "".join(c for c in topic_shorthand if c.isalnum() or c in (' ', '-', '_')).rstrip()
             safe_shorthand = safe_shorthand.replace(' ', '_')
         else:
-            # Fallback: use first few words if no shorthand provided
-            topic_words = paper_topic.split()[:3]
-            safe_shorthand = "_".join(word for word in topic_words if word.isalnum())[:30]
+            # Fallback: use a generic identifier if no shorthand provided
+            safe_shorthand = "grad_bot_analysis"
         
         # Create topic-specific folder with format: <shorthand>_<timestamp>
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
@@ -780,13 +768,13 @@ grad_bot_type: "research_assistant"
                 
                 try:
                     # Analyze the weekly chunk
-                    analysis = self.analyze_weekly_chunk(str(weekly_file), paper_topic, prompt_type)
+                    analysis = self.analyze_weekly_chunk(str(weekly_file), prompt_type)
                     
                     # Get model for metadata
                     model = self.load_grad_bot_model_config()
                     
                     # Save the analysis to the shared topic folder
-                    output_path = self.save_grad_notes(analysis, str(weekly_file), paper_topic, topic_shorthand, topic_folder_path, model)
+                    output_path = self.save_grad_notes(analysis, str(weekly_file), topic_shorthand, topic_folder_path, model)
                     
                     results.append({
                         'week_file': str(weekly_file),
@@ -981,10 +969,9 @@ model: "{model}"
 
 @cli.command()
 @click.option('--weekly-dir', required=True, help='Path to directory containing weekly chunk files')
-@click.option('--topic', required=True, help='Paper topic/thesis for analysis')
-@click.option('--prompt-type', default='grad_bot_default', help='Type of grad bot prompt (grad_bot_default, grad_bot_buffy)')
+@click.option('--prompt-type', default='grad_bot_buffy', help='Type of grad bot prompt (grad_bot_buffy)')
 @click.option('--topic-shorthand', required=True, help='Short identifier for the topic (used in filenames)')
-def run_grad_bots(weekly_dir, topic, prompt_type, topic_shorthand):
+def run_grad_bots(weekly_dir, prompt_type, topic_shorthand):
     """Run grad bot analysis on all weekly conversation chunks"""
     claude_api_key = os.getenv('CLAUDE_API_KEY')
     
@@ -997,11 +984,10 @@ def run_grad_bots(weekly_dir, topic, prompt_type, topic_shorthand):
     
     try:
         console.print(f"[blue]Starting grad bot analysis...[/blue]")
-        console.print(f"[blue]Topic: {topic}[/blue]")
         console.print(f"[blue]Weekly directory: {weekly_dir}[/blue]")
         console.print(f"[blue]Prompt type: {prompt_type}[/blue]")
         
-        results = grad_bot.process_all_weekly_chunks(weekly_dir, topic, prompt_type, topic_shorthand)
+        results = grad_bot.process_all_weekly_chunks(weekly_dir, prompt_type, topic_shorthand)
         
         # Show summary
         if results:
@@ -1016,7 +1002,7 @@ def run_grad_bots(weekly_dir, topic, prompt_type, topic_shorthand):
                 
                 console.print(f"\n[yellow]Next steps:[/yellow]")
                 console.print(f"[yellow]1. Review the grad bot notes in the 'grad_notes/' directory[/yellow]")
-                console.print(f"[yellow]2. Use the extracted quotes and notes to generate your final paper[/yellow]")
+                console.print(f"[yellow]2. Use the synthesized transcripts to generate your final paper[/yellow]")
             
             failed_count = sum(1 for r in results if not r['success'])
             if failed_count > 0:
