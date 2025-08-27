@@ -803,6 +803,144 @@ grad_bot_type: "research_assistant"
         return results
 
 
+class SelectorBot:
+    """Episode selector bot for identifying most relevant episodes for a paper topic"""
+    
+    def __init__(self, api_key: str):
+        self.client = Anthropic(api_key=api_key)
+    
+    def load_selector_bot_prompts(self) -> tuple[str, str]:
+        """Load selector bot system and user prompts from configuration file"""
+        config_path = Path("prompts.toml")
+        if not config_path.exists():
+            raise FileNotFoundError("prompts.toml configuration file not found")
+        
+        config = toml.load(config_path)
+        if 'selector_bot' not in config:
+            raise ValueError("Selector bot prompt configuration not found in prompts.toml")
+        
+        prompt_config = config['selector_bot']
+        system_prompt = prompt_config["system_prompt"]
+        user_prompt = prompt_config["user_prompt"]
+        
+        return system_prompt, user_prompt
+    
+    def load_selector_bot_model_config(self) -> str:
+        """Load selector bot model from configuration file"""
+        config_path = Path("prompts.toml")
+        if not config_path.exists():
+            raise FileNotFoundError("prompts.toml configuration file not found")
+        
+        config = toml.load(config_path)
+        if 'models' not in config or 'selector_bot' not in config['models']:
+            # Fallback to default model if not configured
+            return "claude-sonnet-4-20250514"
+        
+        return config['models']['selector_bot']
+    
+    def load_selector_bot_api_settings(self) -> dict:
+        """Load selector bot API settings from configuration file"""
+        config_path = Path("prompts.toml")
+        if not config_path.exists():
+            raise FileNotFoundError("prompts.toml configuration file not found")
+        
+        config = toml.load(config_path)
+        
+        return {
+            'temperature': config['api_settings']['selector_bot_temperature'],
+            'max_tokens': config['api_settings']['selector_bot_max_tokens']
+        }
+    
+    def load_grad_notes(self, notes_folder: str) -> str:
+        """Load and combine all grad bot notes from a folder"""
+        notes_path = Path(notes_folder)
+        if not notes_path.exists():
+            raise FileNotFoundError(f"Notes folder not found: {notes_folder}")
+        
+        # Find all markdown files in the notes folder
+        note_files = sorted([f for f in notes_path.glob("*.md")])
+        
+        if not note_files:
+            raise FileNotFoundError(f"No markdown note files found in: {notes_folder}")
+        
+        console.print(f"[blue]Loading {len(note_files)} grad bot note files[/blue]")
+        
+        # Combine all the grad bot notes
+        combined_content = []
+        combined_content.append("=== GRAD BOT ANALYSIS NOTES ===\n")
+        
+        for note_file in note_files:
+            with open(note_file, 'r', encoding='utf-8') as f:
+                content = f.read().strip()
+            
+            # Extract just the content after the metadata header
+            if "---" in content:
+                # Split on the second occurrence of "---" to skip the metadata
+                parts = content.split("---", 2)
+                if len(parts) >= 3:
+                    main_content = parts[2].strip()
+                else:
+                    main_content = content
+            else:
+                main_content = content
+            
+            combined_content.append(f"\n=== WEEK FILE: {note_file.name} ===\n")
+            combined_content.append(main_content)
+            combined_content.append("\n" + "="*50 + "\n")
+        
+        combined_content.append("\n=== END GRAD NOTES ===")
+        return "\n".join(combined_content)
+    
+    def select_relevant_episodes(self, notes_folder: str, paper_topic: str) -> List[str]:
+        """Analyze grad notes and return list of most relevant episodes for the paper topic"""
+        
+        console.print(f"[blue]Loading grad bot notes from: {notes_folder}[/blue]")
+        combined_notes = self.load_grad_notes(notes_folder)
+        
+        console.print(f"[blue]Loading selector bot prompts[/blue]")
+        system_prompt, user_prompt_template = self.load_selector_bot_prompts()
+        
+        console.print(f"[blue]Loading model configuration[/blue]")
+        model = self.load_selector_bot_model_config()
+        api_settings = self.load_selector_bot_api_settings()
+        
+        # Substitute variables in user prompt
+        user_prompt = user_prompt_template.replace("{{PAPER_TOPIC}}", paper_topic)
+        user_prompt = user_prompt.replace("{{GRAD_NOTES}}", combined_notes)
+        
+        console.print(f"[yellow]Analyzing episodes for topic: {paper_topic}[/yellow]")
+        
+        try:
+            response = self.client.messages.create(
+                model=model,
+                max_tokens=api_settings['max_tokens'],
+                temperature=api_settings['temperature'],
+                system=system_prompt,
+                messages=[
+                    {"role": "user", "content": user_prompt}
+                ]
+            )
+            
+            response_text = response.content[0].text.strip()
+            console.print(f"[green]✓ Episode selection complete[/green]")
+            
+            # Parse the JSON response
+            try:
+                import json
+                episode_list = json.loads(response_text)
+                if isinstance(episode_list, list):
+                    return episode_list
+                else:
+                    raise ValueError("Response is not a JSON list")
+            except json.JSONDecodeError as e:
+                console.print(f"[red]Error parsing JSON response: {e}[/red]")
+                console.print(f"[red]Raw response: {response_text}[/red]")
+                raise Exception(f"Failed to parse episode selection response as JSON: {e}")
+            
+        except Exception as e:
+            raise Exception(f"Failed to select episodes with Claude: {e}")
+
+
 @click.group()
 def cli():
     """Zulip conversation extractor"""
@@ -1101,6 +1239,50 @@ generation_method: "filtered_notes"
             
         except Exception as e:
             console.print(f"[red]Error: {e}[/red]")
+
+
+@cli.command()
+@click.option('--notes-folder', required=True, help='Path to folder containing grad bot notes (e.g., grad_notes/nietzsche_20250107_120000)')
+@click.option('--topic', required=True, help='Paper topic/thesis to find relevant episodes for')
+@click.option('--output-format', default='list', type=click.Choice(['list', 'json']), help='Output format: list (human-readable) or json')
+def select_episodes(notes_folder, topic, output_format):
+    """Select the most relevant Buffy episodes for a paper topic based on grad bot notes"""
+    claude_api_key = os.getenv('CLAUDE_API_KEY')
+    
+    if not claude_api_key:
+        console.print("[red]Error: CLAUDE_API_KEY must be set in environment variables[/red]")
+        console.print("[yellow]Add CLAUDE_API_KEY=your-api-key to your .env file[/yellow]")
+        return
+    
+    selector_bot = SelectorBot(claude_api_key)
+    
+    try:
+        console.print(f"[blue]Starting episode selection analysis...[/blue]")
+        console.print(f"[blue]Notes folder: {notes_folder}[/blue]")
+        console.print(f"[blue]Paper topic: {topic}[/blue]")
+        
+        # Select relevant episodes
+        episode_list = selector_bot.select_relevant_episodes(notes_folder, topic)
+        
+        if output_format == 'json':
+            # Output raw JSON for programmatic use
+            import json
+            print(json.dumps(episode_list, indent=2))
+        else:
+            # Human-readable output
+            console.print(f"\n[green]Most relevant episodes for '{topic}':[/green]")
+            console.print(f"[blue]Found {len(episode_list)} relevant episodes[/blue]\n")
+            
+            for i, episode in enumerate(episode_list, 1):
+                console.print(f"[yellow]{i:2d}.[/yellow] {episode}")
+            
+            # Also output the JSON format for easy copying
+            console.print(f"\n[blue]JSON format (for copying):[/blue]")
+            import json
+            console.print(f"[dim]{json.dumps(episode_list)}[/dim]")
+        
+    except Exception as e:
+        console.print(f"[red]Error: {e}[/red]")
 
 
 def main():

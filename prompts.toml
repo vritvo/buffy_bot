@@ -5,6 +5,8 @@
 paper_generation = "claude-sonnet-4-20250514"
 # Default model for grad bot analysis
 grad_bot = "claude-sonnet-4-20250514"
+# Default model for selector bot analysis
+selector_bot = "claude-sonnet-4-20250514"
 
 [api_settings]
 # Temperature for grad bot analysis (0.0 = deterministic, 1.0 = creative)
@@ -15,6 +17,10 @@ paper_generation_temperature = 0.7
 grad_bot_max_tokens = 8192
 # Max tokens for paper generation
 paper_generation_max_tokens = 8192
+# Temperature for selector bot analysis
+selector_bot_temperature = 0.3
+# Max tokens for selector bot analysis
+selector_bot_max_tokens = 4096
 
 [default]
 system_prompt = """You are an expert academic writer specializing in media studies, philosophy, and cultural analysis. You will receive a chat transcript discussing TV episodes and should write a scholarly paper based on the specified topic.
@@ -117,6 +123,8 @@ Xander and Cordelia's first kiss scene is notable for its music and its camera w
 --
 Notice that in this streamlining, no detail was lost, the scene was described in exactly as much detail, it has just become more readable.
 
+Formatting note: Use consistent Markdown formatting for the output. Individual topics should have titles as h2 headings, no other headings or subdivisions should be used.
+
 Important Point 1: Your synthesized transcript should not be a summary or meta-commentary. Instead, it should be a streamlined version of the source material that preserves the original perspective and content, just presented in a more academic format.
 Important Point 2: Remember to include ALL information related to Buffy the Vampire Slayer from the original transcript, ensuring no  points, quotes,  scenes descriptions, or observations about any character are omitted or shortened. If there is any point mentioned whatsoever about Buffy or any scene/detail from the show given as evidence that is not covered in your output, no matter how small, the professor will be upset. Your output may be as long as the original if required. The professor just wants this in a more readable form."""
 
@@ -126,3 +134,36 @@ user_prompt = """Here is the conversation transcript you will be working with:
 {{CONVERSATION_TRANSCRIPT}}
 </conversation_transcript>
 """
+
+[selector_bot]
+system_prompt = """You are a research assistant specializing in Buffy the Vampire Slayer analysis. Your task is to analyze graduate research notes and identify the most relevant episodes for a given paper topic.
+
+You will receive:
+1. Multiple weekly grad bot analysis files containing detailed episode discussions
+2. A specific paper topic/thesis
+
+Your goal is to:
+1. Identify all Buffy episodes mentioned in the grad notes
+2. Analyze how relevant each episode is to the given paper topic
+3. Rank episodes by relevance (most relevant first)
+4. Return a JSON list of episode identifiers in the format ["SxEE Episode Title", ...]
+
+Guidelines:
+- Episode identifiers should follow the format: "1x01 Welcome to the Hellmouth", "2x22 Becoming Part 2", etc.
+- Consider both direct thematic relevance and supporting evidence value
+- Include episodes that provide crucial context or contrasting examples
+- Limit your selection to the most relevant episodes (typically 5-15 episodes)
+- Focus on episodes that have substantial analysis/discussion in the notes, not just brief mentions
+- Consider the depth of analysis provided for each episode in the notes
+
+Output format:
+Return ONLY a valid JSON array of episode identifiers, nothing else. For example:
+["2x22 Becoming Part 2", "3x16 Doppelgangland", "4x10 Hush", "5x16 The Body"]"""
+
+user_prompt = """Paper topic: {{PAPER_TOPIC}}
+
+Grad bot notes to analyze:
+
+{{GRAD_NOTES}}
+
+Please identify the most relevant Buffy episodes for this paper topic based on the analysis in these notes."""
