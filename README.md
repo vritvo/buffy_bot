@@ -12,7 +12,16 @@ A simple tool to extract conversations from Zulip and save them for further proc
 
 ## Setup
 
-1. **Install dependencies:**
+1. **Install dependencies using uv (recommended):**
+   ```bash
+   # Install uv if you haven't already
+   curl -LsSf https://astral.sh/uv/install.sh | sh
+   
+   # Install dependencies
+   uv sync
+   ```
+   
+   Or using pip:
    ```bash
    pip install -e .
    ```
@@ -57,40 +66,45 @@ A simple tool to extract conversations from Zulip and save them for further proc
 
 ### Extract from Stream Topic
 ```bash
-python main.py extract-stream --stream "general" --topic "daily-checkin" --limit 500
+uv run python main.py extract-stream --stream "general" --topic "daily-checkin" --limit 500
 ```
 
 ### Extract from Private Conversation
 ```bash
 # Using ZULIP_RECIPIENT from environment (if set)
-python main.py extract-private --limit 1000
+uv run python main.py extract-private --limit 1000
 
 # Or specify users explicitly
-python main.py extract-private --users "user1@example.com,user2@example.com" --limit 1000
+uv run python main.py extract-private --users "user1@example.com,user2@example.com" --limit 1000
 ```
 
 ### Extract with Weekly Chunks (for Multi-LLM Processing)
 ```bash
 # Using ZULIP_RECIPIENT from environment (if set)
-python main.py extract-private --limit 1000 --weekly-chunks
+uv run python main.py extract-private --limit 1000 --weekly-chunks
 
 # Or specify users explicitly
-python main.py extract-private --users "user1@example.com,user2@example.com" --limit 1000 --weekly-chunks
+uv run python main.py extract-private --users "user1@example.com,user2@example.com" --limit 1000 --weekly-chunks
 ```
 
 ### Generate Academic Paper
 ```bash
-python main.py generate-paper --conversation "conversations/private_conversation.json" --topic "Nietzschean values in Buffy's Gingerbread"
+uv run python main.py generate-paper --conversation "conversations/private_conversation.json" --topic "Nietzschean values in Buffy's Gingerbread"
 ```
 
 ### Run Grad Bot Analysis on Weekly Chunks
 ```bash
-python main.py run-grad-bots --weekly-dir "conversations/weekly" --topic "This paper examines how Buffy the Vampire Slayer's episode "Gingerbread" (3.11), paired with "Amends" (3.10), functions as a sophisticated philosophical treatise that weaves together Nietzschean ethics, Freudian psychoanalysis, and feminist-queer theory" --prompt-type "grad_bot_buffy" --topic-shorthand "nietzsche"
+uv run python main.py run-grad-bots --weekly-dir "conversations/weekly" --topic "This paper examines how Buffy the Vampire Slayer's episode "Gingerbread" (3.11), paired with "Amends" (3.10), functions as a sophisticated philosophical treatise that weaves together Nietzschean ethics, Freudian psychoanalysis, and feminist-queer theory" --prompt-type "grad_bot_buffy" --topic-shorthand "nietzsche"
 ```
 
 ### Generate Paper from Grad Bot Notes
 ```bash
-python main.py generate-paper-from-notes --notes-folder "grad_notes/nietzsche_20250107_120000" --topic "This paper examines how Buffy the Vampire Slayer's episode "Gingerbread" (3.11), paired with "Amends" (3.10), functions as a sophisticated philosophical treatise that weaves together Nietzschean ethics, Freudian psychoanalysis, and feminist-queer theory" --prompt-type "buffy"
+uv run python main.py generate-paper-from-notes --notes-folder "grad_notes/nietzsche_20250107_120000" --topic "This paper examines how Buffy the Vampire Slayer's episode "Gingerbread" (3.11), paired with "Amends" (3.10), functions as a sophisticated philosophical treatise that weaves together Nietzschean ethics, Freudian psychoanalysis, and feminist-queer theory" --prompt-type "buffy"
+```
+
+### Use Research Assistant to Find Relevant Episodes
+```bash
+uv run python main.py research-assistant --notes-folder "grad_notes/nietzsche_20250107_120000" --topic "Nietzschean philosophy and moral values in Buffy the Vampire Slayer"
 ```
 
 ## Options
@@ -117,6 +131,11 @@ python main.py generate-paper-from-notes --notes-folder "grad_notes/nietzsche_20
 - `--topic`: Paper topic/thesis statement (required)
 - `--prompt-type`: Type of system prompt (`default` or `buffy`, default: `default`)
 - `--output`: Custom output filename (optional)
+
+### For Research Assistant
+- `--notes-folder`: Path to folder containing grad bot notes (required, e.g., `grad_notes/nietzsche_20250107_120000`)
+- `--topic`: Paper topic/thesis to find relevant episodes for (required)
+- `--output-format`: Output format (`list` for human-readable or `json` for programmatic use, default: `list`)
 
 ## Output Format
 
@@ -156,7 +175,7 @@ Messages are saved as JSON files in the `conversations/` directory with this str
 Based on your usage, to extract a conversation from a URL like `https://yourinstance.zulipchat.com/#narrow/dm/12345-user-name`, use:
 
 ```bash
-python main.py extract-private --users "colleague@example.com" --limit 1000
+uv run python main.py extract-private --users "colleague@example.com" --limit 1000
 ```
 
 This will save the conversation to `conversations/private_conversation.json` ready for further processing.
@@ -165,7 +184,7 @@ This will save the conversation to `conversations/private_conversation.json` rea
 Once you have extracted the conversation, generate an academic paper:
 
 ```bash
-python main.py generate-paper --conversation "conversations/private_conversation.json" --topic "Nietzschean values in Buffy's Gingerbread" --prompt-type "buffy"
+uv run python main.py generate-paper --conversation "conversations/private_conversation.json" --topic "Nietzschean values in Buffy's Gingerbread" --prompt-type "buffy"
 ```
 
 ## Paper Generation Features
@@ -245,13 +264,16 @@ The grad bot system provides AI research assistants that analyze weekly conversa
 
 ```bash
 # Step 1: Extract conversation with weekly chunks
-python main.py extract-private --users "user@example.com" --limit 1000 --weekly-chunks
+uv run python main.py extract-private --users "user@example.com" --limit 1000 --weekly-chunks
 
 # Step 2: Run grad bots on all weekly chunks
-python main.py run-grad-bots --weekly-dir "conversations/weekly" --topic "Your Paper Topic" --prompt-type "grad_bot_buffy"
+uv run python main.py run-grad-bots --weekly-dir "conversations/weekly" --topic "Your Paper Topic" --prompt-type "grad_bot_buffy" --topic-shorthand "your_topic"
 
-# Step 3: Review grad bot notes and generate final paper
-# (Manual review of grad_notes/ directory, then use insights for paper generation)
+# Step 3: Use research assistant to find most relevant episodes for your paper
+uv run python main.py research-assistant --notes-folder "grad_notes/your_topic_YYYYMMDD_HHMMSS" --topic "Your Paper Topic"
+
+# Step 4: Generate final paper from filtered notes
+uv run python main.py generate-paper-from-notes --notes-folder "grad_notes/your_topic_YYYYMMDD_HHMMSS" --topic "Your Paper Topic"
 ```
 
 ### Grad Bot Output Structure
@@ -277,3 +299,72 @@ Each grad bot note file contains:
 - **Focused Research**: Only extracts content relevant to your specific topic
 - **Scalable Processing**: Can handle large conversations across many weeks
 - **Research Foundation**: Creates organized material for final paper writing
+
+## Research Assistant Bot
+
+The Research Assistant Bot analyzes grad bot notes to identify the most relevant Buffy episodes for a specific paper topic. It provides a ranked list of episodes and automatically copies the top 5 most relevant episode transcripts to your notes folder for easy access.
+
+### How the Research Assistant Bot Works
+
+1. **Content Analysis**: Reads all grad bot note files from a specified folder
+2. **Episode Identification**: Identifies all Buffy episodes mentioned in the notes
+3. **Relevance Ranking**: Analyzes how relevant each episode is to the given paper topic
+4. **Script Copying**: Automatically copies the top 5 most relevant episode transcripts from the `scripts/` folder to a `scripts/` subfolder in your notes directory
+5. **Ranked Output**: Returns a JSON list of episodes, ordered by relevance (most relevant first)
+
+### Research Assistant Bot Features
+
+- **Smart Filtering**: Focuses on episodes with substantial analysis, not just brief mentions
+- **Thematic Relevance**: Considers both direct thematic connections and supporting evidence value
+- **Automatic Script Copying**: Copies the top 5 most relevant episode transcripts directly to your notes folder
+- **Fuzzy File Matching**: Intelligently matches episode identifiers to script files, handling variations in naming
+- **Standardized Format**: Returns episode identifiers in standard format (e.g., "2x22 Becoming Part 2")
+- **Configurable Output**: Choose between human-readable list or JSON format
+- **Context Aware**: Considers the depth of analysis provided for each episode
+
+### Example Output
+
+```bash
+uv run python main.py research-assistant --notes-folder "grad_notes/nietzsche_20250820_171124" --topic "Nietzschean philosophy and moral values in Buffy"
+```
+
+**Human-readable output:**
+```
+Most relevant episodes for 'Nietzschean philosophy and moral values in Buffy':
+Found 8 relevant episodes
+Copied 5 script files to grad_notes/nietzsche_20250820_171124/scripts/
+
+Top 5 episodes (scripts copied):
+ 1. 2x22 Becoming Part 2
+ 2. 3x11 Gingerbread
+ 3. 3x10 Amends
+ 4. 4x06 Wild at Heart
+ 5. 4x03 Harsh Light of Day
+
+Additional relevant episodes:
+ 6. 3x16 Doppelgangland
+ 7. 4x09 Something Blue
+ 8. 4x05 Beer Bad
+
+Script files copied to grad_notes/nietzsche_20250820_171124/scripts/:
+  - 2x22 Becoming Part 2.txt
+  - 3x11 Gingerbread.txt
+  - 3x10 Amends.txt
+  - 4x06 Wild At Heart.txt
+  - 4x03 In the Harsh Light of the Day.txt
+
+JSON format (for copying):
+["2x22 Becoming Part 2", "3x11 Gingerbread", "3x10 Amends", "4x06 Wild at Heart", "4x03 Harsh Light of Day", "3x16 Doppelgangland", "4x09 Something Blue", "4x05 Beer Bad"]
+```
+
+### Integration with Research Workflow
+
+The Research Assistant Bot fits seamlessly into the multi-LLM research workflow:
+
+1. **Extract & Analyze**: Use grad bots to analyze weekly conversation chunks
+2. **Find Episodes**: Use the research assistant to identify most relevant episodes and copy their transcripts
+3. **Review Transcripts**: Access the copied episode transcripts in the `scripts/` subfolder of your notes directory
+4. **Focus Research**: Use the episode list and transcripts to guide deeper analysis
+5. **Generate Paper**: Include the selected episodes as primary evidence in your paper
+
+This approach ensures your paper focuses on the episodes with the strongest evidence and most relevant analysis from your conversation data, with immediate access to the full episode transcripts for detailed analysis and quotation.

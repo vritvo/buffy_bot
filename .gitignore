@@ -14,5 +14,9 @@ uv.lock
 # Environment variables
 .env
 
-# Conversations
+# Text input/output
 conversations/
+scripts/
+papers/
+grad_notes/
+logs
