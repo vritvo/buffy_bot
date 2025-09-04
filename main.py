@@ -2,6 +2,8 @@ import os
 import json
 import tempfile
 import toml
+import shutil
+import re
 from datetime import datetime, timezone, timedelta
 from typing import List, Dict, Any, Optional
 from dataclasses import dataclass, asdict
@@ -803,43 +805,43 @@ grad_bot_type: "research_assistant"
         return results
 
 
-class SelectorBot:
-    """Episode selector bot for identifying most relevant episodes for a paper topic"""
+class ResearchAssistantBot:
+    """Research assistant bot for identifying most relevant episodes for a paper topic"""
     
     def __init__(self, api_key: str):
         self.client = Anthropic(api_key=api_key)
     
-    def load_selector_bot_prompts(self) -> tuple[str, str]:
-        """Load selector bot system and user prompts from configuration file"""
+    def load_research_assistant_prompts(self) -> tuple[str, str]:
+        """Load research assistant system and user prompts from configuration file"""
         config_path = Path("prompts.toml")
         if not config_path.exists():
             raise FileNotFoundError("prompts.toml configuration file not found")
         
         config = toml.load(config_path)
-        if 'selector_bot' not in config:
-            raise ValueError("Selector bot prompt configuration not found in prompts.toml")
+        if 'research_assistant' not in config:
+            raise ValueError("Research assistant prompt configuration not found in prompts.toml")
         
-        prompt_config = config['selector_bot']
+        prompt_config = config['research_assistant']
         system_prompt = prompt_config["system_prompt"]
         user_prompt = prompt_config["user_prompt"]
         
         return system_prompt, user_prompt
     
-    def load_selector_bot_model_config(self) -> str:
-        """Load selector bot model from configuration file"""
+    def load_research_assistant_model_config(self) -> str:
+        """Load research assistant model from configuration file"""
         config_path = Path("prompts.toml")
         if not config_path.exists():
             raise FileNotFoundError("prompts.toml configuration file not found")
         
         config = toml.load(config_path)
-        if 'models' not in config or 'selector_bot' not in config['models']:
+        if 'models' not in config or 'research_assistant' not in config['models']:
             # Fallback to default model if not configured
             return "claude-sonnet-4-20250514"
         
-        return config['models']['selector_bot']
+        return config['models']['research_assistant']
     
-    def load_selector_bot_api_settings(self) -> dict:
-        """Load selector bot API settings from configuration file"""
+    def load_research_assistant_api_settings(self) -> dict:
+        """Load research assistant API settings from configuration file"""
         config_path = Path("prompts.toml")
         if not config_path.exists():
             raise FileNotFoundError("prompts.toml configuration file not found")
@@ -847,8 +849,8 @@ class SelectorBot:
         config = toml.load(config_path)
         
         return {
-            'temperature': config['api_settings']['selector_bot_temperature'],
-            'max_tokens': config['api_settings']['selector_bot_max_tokens']
+            'temperature': config['api_settings']['research_assistant_temperature'],
+            'max_tokens': config['api_settings']['research_assistant_max_tokens']
         }
     
     def load_grad_notes(self, notes_folder: str) -> str:
@@ -891,18 +893,65 @@ class SelectorBot:
         combined_content.append("\n=== END GRAD NOTES ===")
         return "\n".join(combined_content)
     
-    def select_relevant_episodes(self, notes_folder: str, paper_topic: str) -> List[str]:
-        """Analyze grad notes and return list of most relevant episodes for the paper topic"""
+    def find_script_file(self, episode_identifier: str, scripts_dir: Path) -> Optional[Path]:
+        """Find the script file that matches the episode identifier"""
+        # Extract season and episode number from identifier like "2x22 Becoming Part 2"
+        match = re.match(r'^(\d+)x(\d+)', episode_identifier)
+        if not match:
+            return None
+        
+        season = match.group(1)
+        episode = match.group(2)
+        episode_prefix = f"{season}x{episode.zfill(2)}"
+        
+        # Look for files that start with the episode prefix
+        for script_file in scripts_dir.glob(f"{episode_prefix} *.txt"):
+            return script_file
+        
+        return None
+    
+    def copy_relevant_scripts(self, episode_list: List[str], notes_folder: str) -> List[str]:
+        """Copy the top 5 relevant script files to a scripts subfolder in the notes folder"""
+        # Limit to top 5 episodes
+        top_episodes = episode_list[:5]
+        
+        scripts_dir = Path("scripts")
+        if not scripts_dir.exists():
+            raise FileNotFoundError("Scripts directory not found")
+        
+        notes_path = Path(notes_folder)
+        scripts_output_dir = notes_path / "scripts"
+        scripts_output_dir.mkdir(exist_ok=True)
+        
+        copied_files = []
+        
+        console.print(f"[blue]Copying top {len(top_episodes)} relevant script files...[/blue]")
+        
+        for i, episode in enumerate(top_episodes, 1):
+            script_file = self.find_script_file(episode, scripts_dir)
+            
+            if script_file:
+                destination = scripts_output_dir / script_file.name
+                shutil.copy2(script_file, destination)
+                copied_files.append(script_file.name)
+                console.print(f"[green]{i:2d}. Copied: {script_file.name}[/green]")
+            else:
+                console.print(f"[yellow]{i:2d}. Not found: {episode}[/yellow]")
+        
+        return copied_files
+    
+    def select_relevant_episodes_and_copy_scripts(self, notes_folder: str, paper_topic: str) -> tuple[List[str], List[str]]:
+        """Analyze grad notes, select episodes, and copy relevant script files"""
         
         console.print(f"[blue]Loading grad bot notes from: {notes_folder}[/blue]")
         combined_notes = self.load_grad_notes(notes_folder)
         
-        console.print(f"[blue]Loading selector bot prompts[/blue]")
-        system_prompt, user_prompt_template = self.load_selector_bot_prompts()
+        console.print(f"[blue]Loading research assistant prompts[/blue]")
+        system_prompt, user_prompt_template = self.load_research_assistant_prompts()
         
         console.print(f"[blue]Loading model configuration[/blue]")
-        model = self.load_selector_bot_model_config()
-        api_settings = self.load_selector_bot_api_settings()
+        model = self.load_research_assistant_model_config()
+        api_settings = self.load_research_assistant_api_settings()
         
         # Substitute variables in user prompt
         user_prompt = user_prompt_template.replace("{{PAPER_TOPIC}}", paper_topic)
@@ -929,7 +978,9 @@ class SelectorBot:
                 import json
                 episode_list = json.loads(response_text)
                 if isinstance(episode_list, list):
-                    return episode_list
+                    # Copy the top 5 relevant script files
+                    copied_files = self.copy_relevant_scripts(episode_list, notes_folder)
+                    return episode_list, copied_files
                 else:
                     raise ValueError("Response is not a JSON list")
             except json.JSONDecodeError as e:
@@ -1245,8 +1296,8 @@ generation_method: "filtered_notes"
 @click.option('--notes-folder', required=True, help='Path to folder containing grad bot notes (e.g., grad_notes/nietzsche_20250107_120000)')
 @click.option('--topic', required=True, help='Paper topic/thesis to find relevant episodes for')
 @click.option('--output-format', default='list', type=click.Choice(['list', 'json']), help='Output format: list (human-readable) or json')
-def select_episodes(notes_folder, topic, output_format):
-    """Select the most relevant Buffy episodes for a paper topic based on grad bot notes"""
+def research_assistant(notes_folder, topic, output_format):
+    """Use research assistant to find the most relevant Buffy episodes for a paper topic based on grad bot notes"""
     claude_api_key = os.getenv('CLAUDE_API_KEY')
     
     if not claude_api_key:
@@ -1254,15 +1305,15 @@ def select_episodes(notes_folder, topic, output_format):
         console.print("[yellow]Add CLAUDE_API_KEY=your-api-key to your .env file[/yellow]")
         return
     
-    selector_bot = SelectorBot(claude_api_key)
+    research_assistant_bot = ResearchAssistantBot(claude_api_key)
     
     try:
         console.print(f"[blue]Starting episode selection analysis...[/blue]")
         console.print(f"[blue]Notes folder: {notes_folder}[/blue]")
         console.print(f"[blue]Paper topic: {topic}[/blue]")
         
-        # Select relevant episodes
-        episode_list = selector_bot.select_relevant_episodes(notes_folder, topic)
+        # Select relevant episodes and copy script files
+        episode_list, copied_files = research_assistant_bot.select_relevant_episodes_and_copy_scripts(notes_folder, topic)
         
         if output_format == 'json':
             # Output raw JSON for programmatic use
@@ -1271,10 +1322,26 @@ def select_episodes(notes_folder, topic, output_format):
         else:
             # Human-readable output
             console.print(f"\n[green]Most relevant episodes for '{topic}':[/green]")
-            console.print(f"[blue]Found {len(episode_list)} relevant episodes[/blue]\n")
+            console.print(f"[blue]Found {len(episode_list)} relevant episodes[/blue]")
+            console.print(f"[blue]Copied {len(copied_files)} script files to {notes_folder}/scripts/[/blue]\n")
             
-            for i, episode in enumerate(episode_list, 1):
+            # Show top 5 episodes (the ones we copied)
+            top_episodes = episode_list[:5]
+            console.print(f"[green]Top 5 episodes (scripts copied):[/green]")
+            for i, episode in enumerate(top_episodes, 1):
                 console.print(f"[yellow]{i:2d}.[/yellow] {episode}")
+            
+            # Show remaining episodes if any
+            if len(episode_list) > 5:
+                console.print(f"\n[blue]Additional relevant episodes:[/blue]")
+                for i, episode in enumerate(episode_list[5:], 6):
+                    console.print(f"[dim]{i:2d}.[/dim] {episode}")
+            
+            # Show copied files
+            if copied_files:
+                console.print(f"\n[green]Script files copied to {notes_folder}/scripts/:[/green]")
+                for file in copied_files:
+                    console.print(f"[blue]  - {file}[/blue]")
             
             # Also output the JSON format for easy copying
             console.print(f"\n[blue]JSON format (for copying):[/blue]")
