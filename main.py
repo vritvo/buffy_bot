@@ -368,18 +368,23 @@ class PaperGenerator:
         self.output_dir = Path("papers")
         self.output_dir.mkdir(exist_ok=True)
     
-    def load_system_prompt(self, prompt_type: str = "default") -> str:
-        """Load system prompt from configuration file"""
+    def load_system_prompt(self) -> tuple[str, str]:
+        """Load system and user prompts from configuration file"""
         config_path = Path("prompts.toml")
         if not config_path.exists():
             raise FileNotFoundError("prompts.toml configuration file not found")
         
         config = toml.load(config_path)
+        prompt_type = "buffy"
         if prompt_type not in config:
             available = list(config.keys())
             raise ValueError(f"Prompt type '{prompt_type}' not found. Available: {available}")
         
-        return config[prompt_type]["system_prompt"]
+        prompt_config = config[prompt_type]
+        system_prompt = prompt_config["system_prompt"]
+        user_prompt = prompt_config["user_prompt"]
+        
+        return system_prompt, user_prompt
     
     def load_model_config(self) -> str:
         """Load paper generation model from configuration file"""
@@ -425,25 +430,22 @@ class PaperGenerator:
         
         return transcript
     
-    def generate_paper(self, conversation_file: str, topic: str, prompt_type: str = "default") -> str:
+    def generate_paper(self, conversation_file: str, topic: str) -> str:
         """Generate a paper using Claude based on the conversation and topic"""
         
         console.print(f"[blue]Loading conversation from: {conversation_file}[/blue]")
         transcript = self.load_conversation(conversation_file)
         
-        console.print(f"[blue]Loading system prompt: {prompt_type}[/blue]")
-        system_prompt = self.load_system_prompt(prompt_type)
+        console.print(f"[blue]Loading system prompt[/blue]")
+        system_prompt, user_prompt_template = self.load_system_prompt()
         
         console.print(f"[blue]Loading model configuration[/blue]")
         model = self.load_model_config()
         
-        user_prompt = f"""Please write an academic paper on the topic: "{topic}"
-
-Based on the following chat transcript:
-
-{transcript}
-
-The paper should be well-structured, insightful, and grounded in the evidence and discussion from the transcript."""
+        # Substitute variables in user prompt
+        user_prompt = user_prompt_template.replace("{{CHAT_TRANSCRIPT}}", transcript)
+        user_prompt = user_prompt.replace("{{SCRIPT_TRANSCRIPTS}}", "")  # No scripts for direct approach
+        user_prompt = user_prompt.replace("{{PAPER_TOPIC}}", topic)
         
         console.print(f"[yellow]Sending request to Claude using model: {model}[/yellow]")
         
@@ -495,7 +497,7 @@ model: "{model}"
         
         return output_path
     
-    def generate_paper_from_notes(self, notes_folder: str, topic: str, prompt_type: str = "default") -> str:
+    def generate_paper_from_notes(self, notes_folder: str, topic: str) -> str:
         """Generate a paper using Claude based on filtered grad bot notes"""
         
         notes_path = Path(notes_folder)
@@ -538,19 +540,16 @@ model: "{model}"
         combined_content.append("\n=== END FILTERED NOTES ===")
         transcript = "\n".join(combined_content)
         
-        console.print(f"[blue]Loading system prompt: {prompt_type}[/blue]")
-        system_prompt = self.load_system_prompt(prompt_type)
+        console.print(f"[blue]Loading system prompt[/blue]")
+        system_prompt, user_prompt_template = self.load_system_prompt()
         
         console.print(f"[blue]Loading model configuration[/blue]")
         model = self.load_model_config()
         
-        user_prompt = f"""Please write an academic paper on the topic: "{topic}"
-
-Based on the following filtered conversation notes that have been analyzed and curated by research assistants:
-
-{transcript}
-
-The paper should be well-structured, insightful, and grounded in the evidence and analysis from the filtered notes. Use the exact quotes and theoretical frameworks identified in the notes to support your arguments."""
+        # Substitute variables in user prompt
+        user_prompt = user_prompt_template.replace("{{CHAT_TRANSCRIPT}}", transcript)
+        user_prompt = user_prompt.replace("{{SCRIPT_TRANSCRIPTS}}", "")  # No scripts for this legacy method
+        user_prompt = user_prompt.replace("{{PAPER_TOPIC}}", topic)
         
         console.print(f"[yellow]Sending request to Claude using model: {model}[/yellow]")
         
@@ -581,13 +580,14 @@ class GradBot:
         self.output_dir.mkdir(exist_ok=True)
         self.logger = GradBotLogger()
     
-    def load_grad_bot_prompts(self, prompt_type: str = "grad_bot_buffy") -> tuple[str, str]:
+    def load_grad_bot_prompts(self) -> tuple[str, str]:
         """Load grad bot system and user prompts from configuration file"""
         config_path = Path("prompts.toml")
         if not config_path.exists():
             raise FileNotFoundError("prompts.toml configuration file not found")
         
         config = toml.load(config_path)
+        prompt_type = "grad_bot_buffy"
         if prompt_type not in config:
             available = [k for k in config.keys() if k.startswith('grad_bot_')]
             raise ValueError(f"Grad bot prompt type '{prompt_type}' not found. Available: {available}")
@@ -634,7 +634,7 @@ Remember to maintain all important details while making it more concise and acad
             'max_tokens': config['api_settings']['grad_bot_max_tokens']
         }
     
-    def analyze_weekly_chunk(self, weekly_file: str, prompt_type: str = "grad_bot_buffy") -> str:
+    def analyze_weekly_chunk(self, weekly_file: str) -> str:
         """Analyze a weekly conversation chunk and extract relevant content"""
         
         file_path = Path(weekly_file)
@@ -651,7 +651,7 @@ Remember to maintain all important details while making it more concise and acad
         console.print(f"[blue]Analyzing: {file_path.name}[/blue]")
         
         # Load system and user prompts
-        system_prompt, user_prompt_template = self.load_grad_bot_prompts(prompt_type)
+        system_prompt, user_prompt_template = self.load_grad_bot_prompts()
         
         # Load model configuration and API settings
         model = self.load_grad_bot_model_config()
@@ -738,7 +738,7 @@ grad_bot_type: "research_assistant"
         
         return output_path
 
-    def process_all_weekly_chunks(self, weekly_dir: str, prompt_type: str = "grad_bot_buffy", topic_shorthand: str = None):
+    def process_all_weekly_chunks(self, weekly_dir: str, topic_shorthand: str = None):
         """Process all weekly chunks in a directory sequentially"""
         weekly_path = Path(weekly_dir)
         if not weekly_path.exists():
@@ -771,7 +771,7 @@ grad_bot_type: "research_assistant"
         console.print(f"[blue]Creating topic folder: {topic_folder_path}[/blue]")
         
         # Log the grad bot execution with prompts and settings
-        system_prompt, user_prompt_template = self.load_grad_bot_prompts(prompt_type)
+        system_prompt, user_prompt_template = self.load_grad_bot_prompts()
         model = self.load_grad_bot_model_config()
         api_settings = self.load_grad_bot_api_settings()
         
@@ -799,7 +799,7 @@ grad_bot_type: "research_assistant"
                 
                 try:
                     # Analyze the weekly chunk
-                    analysis = self.analyze_weekly_chunk(str(weekly_file), prompt_type)
+                    analysis = self.analyze_weekly_chunk(str(weekly_file))
                     
                     # Get model for metadata
                     model = self.load_grad_bot_model_config()
@@ -1034,18 +1034,23 @@ class ProfessorBot:
     def __init__(self, api_key: str):
         self.client = Anthropic(api_key=api_key)
     
-    def load_professor_prompts(self, prompt_type: str = "default") -> str:
-        """Load professor system prompt from configuration file"""
+    def load_professor_prompts(self) -> tuple[str, str]:
+        """Load professor system and user prompts from configuration file"""
         config_path = Path("prompts.toml")
         if not config_path.exists():
             raise FileNotFoundError("prompts.toml configuration file not found")
         
         config = toml.load(config_path)
+        prompt_type = "buffy"
         if prompt_type not in config:
             available = list(config.keys())
             raise ValueError(f"Prompt type '{prompt_type}' not found. Available: {available}")
         
-        return config[prompt_type]["system_prompt"]
+        prompt_config = config[prompt_type]
+        system_prompt = prompt_config["system_prompt"]
+        user_prompt = prompt_config["user_prompt"]
+        
+        return system_prompt, user_prompt
     
     def load_professor_model_config(self) -> str:
         """Load professor model from configuration file"""
@@ -1143,7 +1148,7 @@ class ProfessorBot:
         combined_scripts.append("\n=== END SCRIPTS ===")
         return "\n".join(combined_scripts)
     
-    def generate_paper(self, notes_folder: str, paper_folder: Path, topic: str, prompt_type: str = "default") -> str:
+    def generate_paper(self, notes_folder: str, paper_folder: Path, topic: str) -> str:
         """Generate a paper using Claude based on grad notes and episode scripts"""
         
         console.print(f"[blue]Loading grad bot notes from: {notes_folder}[/blue]")
@@ -1152,21 +1157,17 @@ class ProfessorBot:
         console.print(f"[blue]Loading episode scripts from: {paper_folder}[/blue]")
         episode_scripts = self.load_episode_scripts(paper_folder)
         
-        console.print(f"[blue]Loading professor prompts: {prompt_type}[/blue]")
-        system_prompt = self.load_professor_prompts(prompt_type)
+        console.print(f"[blue]Loading professor prompts[/blue]")
+        system_prompt, user_prompt_template = self.load_professor_prompts()
         
         console.print(f"[blue]Loading model configuration[/blue]")
         model = self.load_professor_model_config()
         api_settings = self.load_professor_api_settings()
         
-        # Substitute variables in system prompt
-        system_prompt = system_prompt.replace("{{CHAT_TRANSCRIPT}}", grad_notes)
-        system_prompt = system_prompt.replace("{{SCRIPT_TRANSCRIPTS}}", episode_scripts)
-        system_prompt = system_prompt.replace("{{PAPER_TOPIC}}", topic)
-        
-        
-        # Simple user prompt - all the instructions are in the system prompt
-        user_prompt = "Please write the academic paper as specified in the instructions."
+        # Substitute variables in user prompt
+        user_prompt = user_prompt_template.replace("{{CHAT_TRANSCRIPT}}", grad_notes)
+        user_prompt = user_prompt.replace("{{SCRIPT_TRANSCRIPTS}}", episode_scripts)
+        user_prompt = user_prompt.replace("{{PAPER_TOPIC}}", topic)
         
         console.print(f"[yellow]Generating paper using model: {model}[/yellow]")
         
@@ -1315,10 +1316,9 @@ def extract_private(users, limit, output, weekly_chunks):
 @cli.command()
 @click.option('--conversation', required=True, help='Path to conversation JSON file')
 @click.option('--topic', required=True, help='Paper topic/thesis')
-@click.option('--prompt-type', default='default', help='Type of system prompt to use (default, buffy)')
 @click.option('--output', help='Custom output filename (optional)')
 @click.option('--topic-shorthand', help='Short identifier for the topic (used in filenames if --output not provided)')
-def generate_paper(conversation, topic, prompt_type, output, topic_shorthand):
+def generate_paper(conversation, topic, output, topic_shorthand):
     """Generate an academic paper from a conversation transcript using Claude"""
     claude_api_key = os.getenv('CLAUDE_API_KEY')
     
@@ -1338,7 +1338,7 @@ def generate_paper(conversation, topic, prompt_type, output, topic_shorthand):
         
         try:
             # Generate the paper
-            paper_content = generator.generate_paper(conversation, topic, prompt_type)
+            paper_content = generator.generate_paper(conversation, topic)
             progress.update(task, description="Saving paper...")
             
             # Get model for metadata
@@ -1382,9 +1382,8 @@ model: "{model}"
 
 @cli.command()
 @click.option('--weekly-dir', required=True, help='Path to directory containing weekly chunk files')
-@click.option('--prompt-type', default='grad_bot_buffy', help='Type of grad bot prompt (grad_bot_buffy)')
 @click.option('--topic-shorthand', required=True, help='Short identifier for the topic (used in filenames)')
-def run_grad_bots(weekly_dir, prompt_type, topic_shorthand):
+def run_grad_bots(weekly_dir, topic_shorthand):
     """Run grad bot analysis on all weekly conversation chunks"""
     claude_api_key = os.getenv('CLAUDE_API_KEY')
     
@@ -1398,9 +1397,8 @@ def run_grad_bots(weekly_dir, prompt_type, topic_shorthand):
     try:
         console.print(f"[blue]Starting grad bot analysis...[/blue]")
         console.print(f"[blue]Weekly directory: {weekly_dir}[/blue]")
-        console.print(f"[blue]Prompt type: {prompt_type}[/blue]")
         
-        results = grad_bot.process_all_weekly_chunks(weekly_dir, prompt_type, topic_shorthand)
+        results = grad_bot.process_all_weekly_chunks(weekly_dir, topic_shorthand)
         
         # Show summary
         if results:
@@ -1428,10 +1426,9 @@ def run_grad_bots(weekly_dir, prompt_type, topic_shorthand):
 @cli.command()
 @click.option('--notes-folder', required=True, help='Path to folder containing grad bot notes (e.g., grad_notes/nietzsche_20250107_120000)')
 @click.option('--topic', required=True, help='Paper topic/thesis')
-@click.option('--prompt-type', default='default', help='Type of system prompt to use (default, buffy)')
 @click.option('--topic-shorthand', help='Short identifier for the topic (used in folder naming if no existing paper folder)')
 @click.option('--paper-folder', help='Path to existing paper folder (if research assistant already created one)')
-def generate_paper_from_notes(notes_folder, topic, prompt_type, topic_shorthand, paper_folder):
+def generate_paper_from_notes(notes_folder, topic, topic_shorthand, paper_folder):
     """Generate an academic paper by running research assistant and professor bot in sequence"""
     claude_api_key = os.getenv('CLAUDE_API_KEY')
     
@@ -1483,7 +1480,7 @@ def generate_paper_from_notes(notes_folder, topic, prompt_type, topic_shorthand,
             professor_bot = ProfessorBot(claude_api_key)
             
             console.print(f"[blue]Running professor bot to generate paper[/blue]")
-            paper_content = professor_bot.generate_paper(notes_folder, target_paper_folder, topic, prompt_type)
+            paper_content = professor_bot.generate_paper(notes_folder, target_paper_folder, topic)
             
             progress.update(task2, description="Saving paper...")
             
