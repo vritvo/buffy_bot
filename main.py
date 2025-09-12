@@ -5,7 +5,7 @@ import toml
 import shutil
 import re
 from datetime import datetime, timezone, timedelta
-from typing import List, Dict, Any, Optional
+from typing import List, Optional
 from dataclasses import dataclass, asdict
 from pathlib import Path
 
@@ -23,6 +23,43 @@ from grad_bot_logger import GradBotLogger
 load_dotenv()
 
 console = Console()
+
+
+def create_paper_folder(topic_shorthand: str = None, notes_folder: str = None) -> Path:
+    """Create a topic-specific folder in the papers directory with consistent naming
+    
+    Args:
+        topic_shorthand: Short identifier for the topic 
+        notes_folder: Optional path to grad notes folder to extract shorthand from
+    
+    Returns:
+        Path to the created folder
+    """
+    papers_dir = Path("papers")
+    papers_dir.mkdir(exist_ok=True)
+    
+    # Determine shorthand from either parameter or notes folder name
+    if topic_shorthand:
+        # Clean the shorthand to be filesystem-safe
+        safe_shorthand = "".join(c for c in topic_shorthand if c.isalnum() or c in (' ', '-', '_')).rstrip()
+        safe_shorthand = safe_shorthand.replace(' ', '_')
+    elif notes_folder:
+        # Extract shorthand from notes folder name (e.g., "nietzsche_20250820_171124" -> "nietzsche")
+        notes_path = Path(notes_folder)
+        folder_name = notes_path.name
+        # Take everything before the first timestamp-like pattern
+        safe_shorthand = re.split(r'_\d{8}_\d{6}', folder_name)[0]
+    else:
+        # Fallback: use a generic identifier
+        safe_shorthand = "paper_topic"
+    
+    # Create topic-specific folder with format: <timestamp>_<shorthand>
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    folder_name = f"{timestamp}_{safe_shorthand}"
+    folder_path = papers_dir / folder_name
+    folder_path.mkdir(exist_ok=True)
+    
+    return folder_path
 
 
 @dataclass
@@ -427,24 +464,16 @@ The paper should be well-structured, insightful, and grounded in the evidence an
         except Exception as e:
             raise Exception(f"Failed to generate paper with Claude: {e}")
     
-    def save_paper(self, content: str, topic: str, conversation_file: str, topic_shorthand: str = None, model: str = None) -> Path:
-        """Save generated paper to a file"""
-        # Use provided shorthand or fallback to a simple default
-        if topic_shorthand:
-            # Clean the shorthand to be filesystem-safe
-            safe_shorthand = "".join(c for c in topic_shorthand if c.isalnum() or c in (' ', '-', '_')).rstrip()
-            safe_shorthand = safe_shorthand.replace(' ', '_')
-        else:
-            # Fallback: use first few words if no shorthand provided
-            topic_words = topic.split()[:3]
-            safe_shorthand = "_".join(word for word in topic_words if word.isalnum())[:30]
+    def save_paper(self, content: str, topic: str, conversation_file: str, topic_shorthand: str = None, model: str = None, paper_folder: Path = None) -> Path:
+        """Save generated paper to a file in the appropriate folder structure"""
+        # Use provided paper folder or create one using the shared function
+        if paper_folder is None:
+            paper_folder = create_paper_folder(topic_shorthand)
+            console.print(f"[blue]Created paper folder: {paper_folder}[/blue]")
         
-        # Include source conversation in filename
-        conv_name = Path(conversation_file).stem
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        filename = f"{timestamp}_{conv_name}_{safe_shorthand}.md"
-        
-        output_path = self.output_dir / filename
+        # Simple filename - just "paper.md" since we're in a topic-specific folder
+        filename = "paper.md"
+        output_path = paper_folder / filename
         
         # Add metadata header to the paper
         if model is None:
@@ -910,8 +939,8 @@ class ResearchAssistantBot:
         
         return None
     
-    def copy_relevant_scripts(self, episode_list: List[str], notes_folder: str) -> List[str]:
-        """Copy the top 5 relevant script files to a scripts subfolder in the notes folder"""
+    def copy_relevant_scripts(self, episode_list: List[str], paper_folder: Path) -> List[str]:
+        """Copy the top 5 relevant script files to a scripts subfolder in the paper folder"""
         # Limit to top 5 episodes
         top_episodes = episode_list[:5]
         
@@ -919,8 +948,7 @@ class ResearchAssistantBot:
         if not scripts_dir.exists():
             raise FileNotFoundError("Scripts directory not found")
         
-        notes_path = Path(notes_folder)
-        scripts_output_dir = notes_path / "scripts"
+        scripts_output_dir = paper_folder / "scripts"
         scripts_output_dir.mkdir(exist_ok=True)
         
         copied_files = []
@@ -940,8 +968,8 @@ class ResearchAssistantBot:
         
         return copied_files
     
-    def select_relevant_episodes_and_copy_scripts(self, notes_folder: str, paper_topic: str) -> tuple[List[str], List[str]]:
-        """Analyze grad notes, select episodes, and copy relevant script files"""
+    def select_relevant_episodes_and_copy_scripts(self, notes_folder: str, paper_topic: str, topic_shorthand: str = None) -> tuple[List[str], List[str], Path]:
+        """Analyze grad notes, select episodes, and copy relevant script files to papers folder"""
         
         console.print(f"[blue]Loading grad bot notes from: {notes_folder}[/blue]")
         combined_notes = self.load_grad_notes(notes_folder)
@@ -978,9 +1006,13 @@ class ResearchAssistantBot:
                 import json
                 episode_list = json.loads(response_text)
                 if isinstance(episode_list, list):
-                    # Copy the top 5 relevant script files
-                    copied_files = self.copy_relevant_scripts(episode_list, notes_folder)
-                    return episode_list, copied_files
+                    # Create paper folder using shared function
+                    paper_folder = create_paper_folder(topic_shorthand, notes_folder)
+                    console.print(f"[blue]Created paper folder: {paper_folder}[/blue]")
+                    
+                    # Copy the top 5 relevant script files to the paper folder
+                    copied_files = self.copy_relevant_scripts(episode_list, paper_folder)
+                    return episode_list, copied_files, paper_folder
                 else:
                     raise ValueError("Response is not a JSON list")
             except json.JSONDecodeError as e:
@@ -1120,13 +1152,13 @@ def generate_paper(conversation, topic, prompt_type, output, topic_shorthand):
             # Get model for metadata
             model = generator.load_model_config()
             
-            # Save the paper
+            # Save the paper using the new folder structure
             if output:
-                # If custom output provided, use it
-                output_path = Path("papers") / output
+                # If custom output provided, create a paper folder and use custom filename
+                paper_folder = create_paper_folder(topic_shorthand)
+                output_path = paper_folder / output
                 if not output.endswith('.md'):
                     output_path = output_path.with_suffix('.md')
-                output_path.parent.mkdir(exist_ok=True)
                 
                 # Add metadata header
                 metadata = f"""---
@@ -1141,7 +1173,7 @@ model: "{model}"
                 with open(output_path, 'w', encoding='utf-8') as f:
                     f.write(metadata + paper_content)
             else:
-                # Use automatic filename
+                # Use automatic filename with folder structure
                 output_path = generator.save_paper(paper_content, topic, conversation, topic_shorthand, model)
             
             progress.update(task, description=f"Paper saved!")
@@ -1206,7 +1238,8 @@ def run_grad_bots(weekly_dir, prompt_type, topic_shorthand):
 @click.option('--topic', required=True, help='Paper topic/thesis')
 @click.option('--prompt-type', default='default', help='Type of system prompt to use (default, buffy)')
 @click.option('--output', help='Custom output filename (optional)')
-def generate_paper_from_notes(notes_folder, topic, prompt_type, output):
+@click.option('--paper-folder', help='Path to existing paper folder (if research assistant already created one)')
+def generate_paper_from_notes(notes_folder, topic, prompt_type, output, paper_folder):
     """Generate an academic paper from filtered grad bot notes using Claude"""
     claude_api_key = os.getenv('CLAUDE_API_KEY')
     
@@ -1229,16 +1262,28 @@ def generate_paper_from_notes(notes_folder, topic, prompt_type, output):
             paper_content = generator.generate_paper_from_notes(notes_folder, topic, prompt_type)
             progress.update(task, description="Saving paper...")
             
-            # Save the paper
+            # Get model for metadata
+            model = generator.load_model_config()
+            
+            # Determine the paper folder to use
+            target_paper_folder = None
+            if paper_folder:
+                # Use provided paper folder
+                target_paper_folder = Path(paper_folder)
+                if not target_paper_folder.exists():
+                    console.print(f"[red]Error: Paper folder not found: {paper_folder}[/red]")
+                    return
+                console.print(f"[blue]Using existing paper folder: {target_paper_folder}[/blue]")
+            
+            # Save the paper using the new folder structure
             if output:
-                # If custom output provided, use it
-                output_path = Path("papers") / output
+                # If custom output provided, use it with paper folder
+                if target_paper_folder is None:
+                    target_paper_folder = create_paper_folder(notes_folder=notes_folder)
+                
+                output_path = target_paper_folder / output
                 if not output.endswith('.md'):
                     output_path = output_path.with_suffix('.md')
-                output_path.parent.mkdir(exist_ok=True)
-                
-                # Get model for metadata
-                model = generator.load_model_config()
                 
                 # Add metadata header
                 metadata = f"""---
@@ -1254,31 +1299,28 @@ generation_method: "filtered_notes"
                 with open(output_path, 'w', encoding='utf-8') as f:
                     f.write(metadata + paper_content)
             else:
-                # Use automatic filename based on notes folder
-                notes_path = Path(notes_folder)
-                folder_name = notes_path.name  # e.g., "nietzsche_20250107_120000"
+                # Use the save_paper method with the target folder
+                output_path = generator.save_paper(
+                    paper_content, topic, notes_folder, 
+                    paper_folder=target_paper_folder, model=model
+                )
                 
-                timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-                filename = f"{timestamp}_paper_from_{folder_name}.md"
-                output_path = Path("papers") / filename
-                output_path.parent.mkdir(exist_ok=True)
+                # Update metadata to indicate filtered notes generation method
+                with open(output_path, 'r', encoding='utf-8') as f:
+                    content = f.read()
                 
-                # Get model for metadata
-                model = generator.load_model_config()
-                
-                # Add metadata header
-                metadata = f"""---
-title: "{topic}"
-source_notes: "{notes_folder}"
-generated_at: "{datetime.now().isoformat()}"
-model: "{model}"
-generation_method: "filtered_notes"
----
-
-"""
+                # Add generation_method to metadata
+                content = content.replace(
+                    f'model: "{model}"',
+                    f'model: "{model}"\ngeneration_method: "filtered_notes"\nsource_notes: "{notes_folder}"'
+                )
+                content = content.replace(
+                    f'source_conversation: "{notes_folder}"',
+                    f'source_notes: "{notes_folder}"'
+                )
                 
                 with open(output_path, 'w', encoding='utf-8') as f:
-                    f.write(metadata + paper_content)
+                    f.write(content)
             
             progress.update(task, description=f"Paper saved!")
             console.print(f"[green]✓ Paper generated from notes and saved to: {output_path}[/green]")
@@ -1295,8 +1337,9 @@ generation_method: "filtered_notes"
 @cli.command()
 @click.option('--notes-folder', required=True, help='Path to folder containing grad bot notes (e.g., grad_notes/nietzsche_20250107_120000)')
 @click.option('--topic', required=True, help='Paper topic/thesis to find relevant episodes for')
+@click.option('--topic-shorthand', help='Short identifier for the topic (used in folder naming)')
 @click.option('--output-format', default='list', type=click.Choice(['list', 'json']), help='Output format: list (human-readable) or json')
-def research_assistant(notes_folder, topic, output_format):
+def research_assistant(notes_folder, topic, topic_shorthand, output_format):
     """Use research assistant to find the most relevant Buffy episodes for a paper topic based on grad bot notes"""
     claude_api_key = os.getenv('CLAUDE_API_KEY')
     
@@ -1312,8 +1355,8 @@ def research_assistant(notes_folder, topic, output_format):
         console.print(f"[blue]Notes folder: {notes_folder}[/blue]")
         console.print(f"[blue]Paper topic: {topic}[/blue]")
         
-        # Select relevant episodes and copy script files
-        episode_list, copied_files = research_assistant_bot.select_relevant_episodes_and_copy_scripts(notes_folder, topic)
+        # Select relevant episodes and copy script files to papers folder
+        episode_list, copied_files, paper_folder = research_assistant_bot.select_relevant_episodes_and_copy_scripts(notes_folder, topic, topic_shorthand)
         
         if output_format == 'json':
             # Output raw JSON for programmatic use
@@ -1323,7 +1366,8 @@ def research_assistant(notes_folder, topic, output_format):
             # Human-readable output
             console.print(f"\n[green]Most relevant episodes for '{topic}':[/green]")
             console.print(f"[blue]Found {len(episode_list)} relevant episodes[/blue]")
-            console.print(f"[blue]Copied {len(copied_files)} script files to {notes_folder}/scripts/[/blue]\n")
+            console.print(f"[blue]Created paper folder: {paper_folder}[/blue]")
+            console.print(f"[blue]Copied {len(copied_files)} script files to {paper_folder}/scripts/[/blue]\n")
             
             # Show top 5 episodes (the ones we copied)
             top_episodes = episode_list[:5]
@@ -1339,7 +1383,7 @@ def research_assistant(notes_folder, topic, output_format):
             
             # Show copied files
             if copied_files:
-                console.print(f"\n[green]Script files copied to {notes_folder}/scripts/:[/green]")
+                console.print(f"\n[green]Script files copied to {paper_folder}/scripts/:[/green]")
                 for file in copied_files:
                     console.print(f"[blue]  - {file}[/blue]")
             

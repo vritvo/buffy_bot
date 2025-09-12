@@ -149,7 +149,7 @@ Your goal is to:
 4. Return a JSON list of episode identifiers in the format ["SxEE Episode Title", ...]
 
 Guidelines:
-- Episode identifiers should follow the format: "1x01 Welcome to the Hellmouth", "2x22 Becoming Part 2", etc.
+- Episode identifiers should follow the format: "SxEE Episode Name1", "SxEE Episode Name2", etc.
 - Consider both direct thematic relevance and supporting evidence value
 - Include episodes that provide crucial context or contrasting examples
 - Limit your selection to the most relevant episodes (typically 8-15 episodes, with the top 5 being the most crucial)
@@ -158,7 +158,7 @@ Guidelines:
 
 Output format:
 Return ONLY a valid JSON array of episode identifiers, nothing else. For example:
-["2x22 Becoming Part 2", "3x16 Doppelgangland", "4x10 Hush", "5x16 The Body"]"""
+["SxEE Episode Name1", "SxEE Episode Name2", "SxEE Episode Name3", "SxEE Episode Name4"]"""
 
 user_prompt = """Paper topic: {{PAPER_TOPIC}}
 
