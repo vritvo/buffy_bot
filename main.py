@@ -968,7 +968,7 @@ class ResearchAssistantBot:
         
         return copied_files
     
-    def select_relevant_episodes_and_copy_scripts(self, notes_folder: str, paper_topic: str, topic_shorthand: str = None) -> tuple[List[str], List[str], Path]:
+    def select_relevant_episodes_and_copy_scripts(self, notes_folder: str, paper_topic: str, topic_shorthand: str = None, target_paper_folder: Path = None) -> tuple[List[str], List[str], Path]:
         """Analyze grad notes, select episodes, and copy relevant script files to papers folder"""
         
         console.print(f"[blue]Loading grad bot notes from: {notes_folder}[/blue]")
@@ -1006,9 +1006,13 @@ class ResearchAssistantBot:
                 import json
                 episode_list = json.loads(response_text)
                 if isinstance(episode_list, list):
-                    # Create paper folder using shared function
-                    paper_folder = create_paper_folder(topic_shorthand, notes_folder)
-                    console.print(f"[blue]Created paper folder: {paper_folder}[/blue]")
+                    # Use provided paper folder or create new one
+                    if target_paper_folder is None:
+                        paper_folder = create_paper_folder(topic_shorthand, notes_folder)
+                        console.print(f"[blue]Created paper folder: {paper_folder}[/blue]")
+                    else:
+                        paper_folder = target_paper_folder
+                        console.print(f"[blue]Using provided paper folder: {paper_folder}[/blue]")
                     
                     # Copy the top 5 relevant script files to the paper folder
                     copied_files = self.copy_relevant_scripts(episode_list, paper_folder)
@@ -1022,6 +1026,194 @@ class ResearchAssistantBot:
             
         except Exception as e:
             raise Exception(f"Failed to select episodes with Claude: {e}")
+
+
+class ProfessorBot:
+    """Professor bot for generating academic papers from curated research materials"""
+    
+    def __init__(self, api_key: str):
+        self.client = Anthropic(api_key=api_key)
+    
+    def load_professor_prompts(self, prompt_type: str = "default") -> str:
+        """Load professor system prompt from configuration file"""
+        config_path = Path("prompts.toml")
+        if not config_path.exists():
+            raise FileNotFoundError("prompts.toml configuration file not found")
+        
+        config = toml.load(config_path)
+        if prompt_type not in config:
+            available = list(config.keys())
+            raise ValueError(f"Prompt type '{prompt_type}' not found. Available: {available}")
+        
+        return config[prompt_type]["system_prompt"]
+    
+    def load_professor_model_config(self) -> str:
+        """Load professor model from configuration file"""
+        config_path = Path("prompts.toml")
+        if not config_path.exists():
+            raise FileNotFoundError("prompts.toml configuration file not found")
+        
+        config = toml.load(config_path)
+        if 'models' not in config or 'paper_generation' not in config['models']:
+            # Fallback to default model if not configured
+            return "claude-sonnet-4-20250514"
+        
+        return config['models']['paper_generation']
+    
+    def load_professor_api_settings(self) -> dict:
+        """Load professor API settings from configuration file"""
+        config_path = Path("prompts.toml")
+        if not config_path.exists():
+            raise FileNotFoundError("prompts.toml configuration file not found")
+        
+        config = toml.load(config_path)
+        
+        return {
+            'temperature': config['api_settings']['paper_generation_temperature'],
+            'max_tokens': config['api_settings']['paper_generation_max_tokens']
+        }
+    
+    def load_grad_notes(self, notes_folder: str) -> str:
+        """Load and combine all grad bot notes from a folder"""
+        notes_path = Path(notes_folder)
+        if not notes_path.exists():
+            raise FileNotFoundError(f"Notes folder not found: {notes_folder}")
+        
+        # Find all markdown files in the notes folder
+        note_files = sorted([f for f in notes_path.glob("*.md")])
+        
+        if not note_files:
+            raise FileNotFoundError(f"No markdown note files found in: {notes_folder}")
+        
+        console.print(f"[blue]Loading {len(note_files)} grad bot note files[/blue]")
+        
+        # Combine all the grad bot notes
+        combined_content = []
+        combined_content.append("=== FILTERED CONVERSATION NOTES ===\n")
+        
+        for note_file in note_files:
+            with open(note_file, 'r', encoding='utf-8') as f:
+                content = f.read().strip()
+            
+            # Extract just the content after the metadata header
+            if "---" in content:
+                # Split on the second occurrence of "---" to skip the metadata
+                parts = content.split("---", 2)
+                if len(parts) >= 3:
+                    main_content = parts[2].strip()
+                else:
+                    main_content = content
+            else:
+                main_content = content
+            
+            combined_content.append(f"\n=== WEEK: {note_file.stem} ===\n")
+            combined_content.append(main_content)
+            combined_content.append("\n" + "="*50 + "\n")
+        
+        combined_content.append("\n=== END FILTERED NOTES ===")
+        return "\n".join(combined_content)
+    
+    def load_episode_scripts(self, paper_folder: Path) -> str:
+        """Load episode scripts from the paper folder"""
+        scripts_dir = paper_folder / "scripts"
+        if not scripts_dir.exists():
+            console.print(f"[yellow]No scripts folder found in {paper_folder}[/yellow]")
+            return ""
+        
+        script_files = sorted([f for f in scripts_dir.glob("*.txt")])
+        if not script_files:
+            console.print(f"[yellow]No script files found in {scripts_dir}[/yellow]")
+            return ""
+        
+        console.print(f"[blue]Loading {len(script_files)} episode scripts[/blue]")
+        
+        # Combine all episode scripts
+        combined_scripts = []
+        combined_scripts.append("=== EPISODE SCRIPTS ===\n")
+        
+        for script_file in script_files:
+            with open(script_file, 'r', encoding='utf-8') as f:
+                content = f.read().strip()
+            
+            episode_name = script_file.stem  # filename without extension
+            combined_scripts.append(f"\n=== EPISODE: {episode_name} ===\n")
+            combined_scripts.append(content)
+            combined_scripts.append("\n" + "="*50 + "\n")
+        
+        combined_scripts.append("\n=== END SCRIPTS ===")
+        return "\n".join(combined_scripts)
+    
+    def generate_paper(self, notes_folder: str, paper_folder: Path, topic: str, prompt_type: str = "default") -> str:
+        """Generate a paper using Claude based on grad notes and episode scripts"""
+        
+        console.print(f"[blue]Loading grad bot notes from: {notes_folder}[/blue]")
+        grad_notes = self.load_grad_notes(notes_folder)
+        
+        console.print(f"[blue]Loading episode scripts from: {paper_folder}[/blue]")
+        episode_scripts = self.load_episode_scripts(paper_folder)
+        
+        console.print(f"[blue]Loading professor prompts: {prompt_type}[/blue]")
+        system_prompt = self.load_professor_prompts(prompt_type)
+        
+        console.print(f"[blue]Loading model configuration[/blue]")
+        model = self.load_professor_model_config()
+        api_settings = self.load_professor_api_settings()
+        
+        # Substitute variables in system prompt
+        system_prompt = system_prompt.replace("{{CHAT_TRANSCRIPT}}", grad_notes)
+        system_prompt = system_prompt.replace("{{SCRIPT_TRANSCRIPTS}}", episode_scripts)
+        system_prompt = system_prompt.replace("{{PAPER_TOPIC}}", topic)
+        
+        
+        # Simple user prompt - all the instructions are in the system prompt
+        user_prompt = "Please write the academic paper as specified in the instructions."
+        
+        console.print(f"[yellow]Generating paper using model: {model}[/yellow]")
+        
+        try:
+            response = self.client.messages.create(
+                model=model,
+                max_tokens=api_settings['max_tokens'],
+                temperature=api_settings['temperature'],
+                system=system_prompt,
+                messages=[
+                    {"role": "user", "content": user_prompt}
+                ]
+            )
+            
+            paper_content = response.content[0].text
+            console.print(f"[green]✓ Paper generated ({len(paper_content)} characters)[/green]")
+            return paper_content
+            
+        except Exception as e:
+            raise Exception(f"Failed to generate paper with Claude: {e}")
+    
+    def save_paper(self, content: str, topic: str, paper_folder: Path, notes_folder: str, model: str = None) -> Path:
+        """Save generated paper to the paper folder"""
+        # Simple filename - just "paper.md" since we're in a topic-specific folder
+        filename = "paper.md"
+        output_path = paper_folder / filename
+        
+        # Get model for metadata if not provided
+        if model is None:
+            model = self.load_professor_model_config()
+        
+        metadata = f"""---
+title: "{topic}"
+source_notes: "{notes_folder}"
+generated_at: "{datetime.now().isoformat()}"
+model: "{model}"
+generation_method: "professor_bot"
+---
+
+"""
+        
+        full_content = metadata + content
+        
+        with open(output_path, 'w', encoding='utf-8') as f:
+            f.write(full_content)
+        
+        return output_path
 
 
 @click.group()
@@ -1237,10 +1429,10 @@ def run_grad_bots(weekly_dir, prompt_type, topic_shorthand):
 @click.option('--notes-folder', required=True, help='Path to folder containing grad bot notes (e.g., grad_notes/nietzsche_20250107_120000)')
 @click.option('--topic', required=True, help='Paper topic/thesis')
 @click.option('--prompt-type', default='default', help='Type of system prompt to use (default, buffy)')
-@click.option('--output', help='Custom output filename (optional)')
+@click.option('--topic-shorthand', help='Short identifier for the topic (used in folder naming if no existing paper folder)')
 @click.option('--paper-folder', help='Path to existing paper folder (if research assistant already created one)')
-def generate_paper_from_notes(notes_folder, topic, prompt_type, output, paper_folder):
-    """Generate an academic paper from filtered grad bot notes using Claude"""
+def generate_paper_from_notes(notes_folder, topic, prompt_type, topic_shorthand, paper_folder):
+    """Generate an academic paper by running research assistant and professor bot in sequence"""
     claude_api_key = os.getenv('CLAUDE_API_KEY')
     
     if not claude_api_key:
@@ -1248,24 +1440,14 @@ def generate_paper_from_notes(notes_folder, topic, prompt_type, output, paper_fo
         console.print("[yellow]Add CLAUDE_API_KEY=your-api-key to your .env file[/yellow]")
         return
     
-    generator = PaperGenerator(claude_api_key)
-    
     with Progress(
         SpinnerColumn(),
         TextColumn("[progress.description]{task.description}"),
         console=console
     ) as progress:
-        task = progress.add_task("Generating paper from notes...", total=None)
         
         try:
-            # Generate the paper from notes
-            paper_content = generator.generate_paper_from_notes(notes_folder, topic, prompt_type)
-            progress.update(task, description="Saving paper...")
-            
-            # Get model for metadata
-            model = generator.load_model_config()
-            
-            # Determine the paper folder to use
+            # Determine paper folder - create early so both bots use the same one
             target_paper_folder = None
             if paper_folder:
                 # Use provided paper folder
@@ -1274,56 +1456,44 @@ def generate_paper_from_notes(notes_folder, topic, prompt_type, output, paper_fo
                     console.print(f"[red]Error: Paper folder not found: {paper_folder}[/red]")
                     return
                 console.print(f"[blue]Using existing paper folder: {target_paper_folder}[/blue]")
-            
-            # Save the paper using the new folder structure
-            if output:
-                # If custom output provided, use it with paper folder
-                if target_paper_folder is None:
-                    target_paper_folder = create_paper_folder(notes_folder=notes_folder)
-                
-                output_path = target_paper_folder / output
-                if not output.endswith('.md'):
-                    output_path = output_path.with_suffix('.md')
-                
-                # Add metadata header
-                metadata = f"""---
-title: "{topic}"
-source_notes: "{notes_folder}"
-generated_at: "{datetime.now().isoformat()}"
-model: "{model}"
-generation_method: "filtered_notes"
----
-
-"""
-                
-                with open(output_path, 'w', encoding='utf-8') as f:
-                    f.write(metadata + paper_content)
             else:
-                # Use the save_paper method with the target folder
-                output_path = generator.save_paper(
-                    paper_content, topic, notes_folder, 
-                    paper_folder=target_paper_folder, model=model
-                )
-                
-                # Update metadata to indicate filtered notes generation method
-                with open(output_path, 'r', encoding='utf-8') as f:
-                    content = f.read()
-                
-                # Add generation_method to metadata
-                content = content.replace(
-                    f'model: "{model}"',
-                    f'model: "{model}"\ngeneration_method: "filtered_notes"\nsource_notes: "{notes_folder}"'
-                )
-                content = content.replace(
-                    f'source_conversation: "{notes_folder}"',
-                    f'source_notes: "{notes_folder}"'
-                )
-                
-                with open(output_path, 'w', encoding='utf-8') as f:
-                    f.write(content)
+                # Create new paper folder using shared function
+                target_paper_folder = create_paper_folder(topic_shorthand, notes_folder)
+                console.print(f"[blue]Created paper folder: {target_paper_folder}[/blue]")
             
-            progress.update(task, description=f"Paper saved!")
-            console.print(f"[green]✓ Paper generated from notes and saved to: {output_path}[/green]")
+            # Step 1: Run research assistant if needed (to get episodes and copy scripts)
+            scripts_dir = target_paper_folder / "scripts"
+            if not (scripts_dir.exists() and list(scripts_dir.glob("*.txt"))):
+                task1 = progress.add_task("Running research assistant...", total=None)
+                console.print(f"[blue]Running research assistant to find relevant episodes and copy scripts[/blue]")
+                
+                research_assistant_bot = ResearchAssistantBot(claude_api_key)
+                episode_list, copied_files, _ = research_assistant_bot.select_relevant_episodes_and_copy_scripts(
+                    notes_folder, topic, topic_shorthand, target_paper_folder
+                )
+                
+                console.print(f"[green]✓ Research assistant copied {len(copied_files)} script files[/green]")
+                progress.update(task1, description="✓ Research assistant complete")
+            else:
+                console.print(f"[blue]Scripts already exist in {scripts_dir}, skipping research assistant[/blue]")
+            
+            # Step 2: Run professor bot to generate paper
+            task2 = progress.add_task("Running professor bot...", total=None)
+            
+            professor_bot = ProfessorBot(claude_api_key)
+            
+            console.print(f"[blue]Running professor bot to generate paper[/blue]")
+            paper_content = professor_bot.generate_paper(notes_folder, target_paper_folder, topic, prompt_type)
+            
+            progress.update(task2, description="Saving paper...")
+            
+            # Save the paper
+            output_path = professor_bot.save_paper(paper_content, topic, target_paper_folder, notes_folder)
+            
+            progress.update(task2, description="✓ Professor bot complete")
+            
+            console.print(f"[green]✓ Paper generated and saved to: {output_path}[/green]")
+            console.print(f"[blue]Paper folder contents: {target_paper_folder}[/blue]")
             
             # Show a preview of the paper
             console.print("\n[blue]Paper preview:[/blue]")

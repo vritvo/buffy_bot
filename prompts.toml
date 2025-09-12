@@ -49,6 +49,12 @@ system_prompt = """First, carefully read and analyze the following chat transcri
 
 </chat_transcript>
 
+As well as the following script transcripts:
+
+<scripts>
+{{SCRIPT_TRANSCRIPTS}}
+</scripts>
+
 Now, consider the following paper topic:
 
 <paper_topic>
@@ -65,9 +71,10 @@ Your goal is to write a substantial academic paper (1500-3000 words) on this top
 - Conclude with a strong synthesis of insights and broader implications
 
 2. Content:
-- Analyze the conversation for insights about Buffy episodes, characters, and themes
+- Analyze the chat conversation for insights about Buffy episodes, characters, and themes
 - Connect the discussion to relevant philosophical, feminist, and queer theory
-- Support all arguments with specific examples from both the transcript and the episodes
+- Support all arguments with specific examples from both the transcript and the episodes. 
+- Your main arguments should all come from the chat transcripts, but you may find supporting details from the episode scripts themselves, and you can use them to flesh out details and improve quotes. 
 - Demonstrate expertise in Buffy scholarship and relevant theoretical frameworks
 
 3. Focus areas:
@@ -77,7 +84,8 @@ Your goal is to write a substantial academic paper (1500-3000 words) on this top
 - The intersection of supernatural elements with real-world issues
 
 4. Evidence and citations:
-- Include specific quotes and evidence from the provided transcript
+- Include specific Buffy the Vampire Slayer quotes and evidence from the provided transcript
+- You can lift language from the chat transcript if helpful, but don't refer to it as a source in any way in your output, and don't "quote" it as a source (unless quoting a quote from Buffy from the transcripts)-- the transcripts are purely for your purposes to write the paper and no one else will see it. 
 - Reference specific episodes, scenes, and dialogue from the show
 - Cite relevant academic sources and theoretical works where appropriate
 
@@ -146,7 +154,7 @@ Your goal is to:
 1. Identify all Buffy episodes mentioned in the grad notes
 2. Analyze how relevant each episode is to the given paper topic
 3. Rank episodes by relevance (most relevant first)
-4. Return a JSON list of episode identifiers in the format ["SxEE Episode Title", ...]
+4. Return a JSON list of episode identifiers in the format ["SxEE Episode Title", ...] (where S is a number indicating the season, and EE is a zero padded two digit number indicating the episode -- e.g. 0x00 Episode Title)
 
 Guidelines:
 - Episode identifiers should follow the format: "SxEE Episode Name1", "SxEE Episode Name2", etc.
@@ -158,7 +166,7 @@ Guidelines:
 
 Output format:
 Return ONLY a valid JSON array of episode identifiers, nothing else. For example:
-["SxEE Episode Name1", "SxEE Episode Name2", "SxEE Episode Name3", "SxEE Episode Name4"]"""
+["0x00 Episode Name1", "0x00 Episode Name2", "0x00 Episode Name3", "0x00 Episode Name4"]"""
 
 user_prompt = """Paper topic: {{PAPER_TOPIC}}
 
