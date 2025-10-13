@@ -202,6 +202,8 @@ site = {site_url}
                     timestamp=msg['timestamp']
                 )
                 messages.append(message)
+        else:
+            print(result['msg'])
         
         return messages
     
@@ -679,7 +681,7 @@ Remember to maintain all important details while making it more concise and acad
         except Exception as e:
             raise Exception(f"Failed to analyze weekly chunk with Claude: {e}")
     
-    def save_grad_notes(self, analysis: str, weekly_file: str, topic_shorthand: str = None, topic_folder_path: Path = None, model: str = None) -> Path:
+    def save_grad_notes(self, analysis: str, weekly_file: str, topic_folder_path: Path = None, model: str = None) -> Path:
         """Save grad bot analysis to a file in a topic-specific folder"""
         # Extract week identifier from filename
         week_file = Path(weekly_file)
@@ -691,20 +693,11 @@ Remember to maintain all important details while making it more concise and acad
         else:
             week_part = week_name
         
-        # Use provided shorthand or fallback to a simple default
-        if topic_shorthand:
-            # Clean the shorthand to be filesystem-safe
-            safe_shorthand = "".join(c for c in topic_shorthand if c.isalnum() or c in (' ', '-', '_')).rstrip()
-            safe_shorthand = safe_shorthand.replace(' ', '_')
-        else:
-            # Fallback: use a generic identifier if no shorthand provided
-            safe_shorthand = "grad_bot_analysis"
-        
-        # Use provided topic folder or create a new one
+        # Use provided folder or create a new one
         if topic_folder_path is None:
-            # Create topic-specific folder with format: <shorthand>_<timestamp>
+            # Create generic folder for grad bot analysis
             timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-            topic_folder_name = f"{safe_shorthand}_{timestamp}"
+            topic_folder_name = f"grad_bot_analysis_{timestamp}"
             topic_folder_path = self.output_dir / topic_folder_name
             topic_folder_path.mkdir(exist_ok=True)
         
@@ -738,7 +731,7 @@ grad_bot_type: "research_assistant"
         
         return output_path
 
-    def process_all_weekly_chunks(self, weekly_dir: str, topic_shorthand: str = None):
+    def process_all_weekly_chunks(self, weekly_dir: str):
         """Process all weekly chunks in a directory sequentially"""
         weekly_path = Path(weekly_dir)
         if not weekly_path.exists():
@@ -753,18 +746,10 @@ grad_bot_type: "research_assistant"
         
         console.print(f"[blue]Found {len(weekly_files)} weekly files to process[/blue]")
         
-        # Create single topic-specific folder for this entire run
-        if topic_shorthand:
-            # Clean the shorthand to be filesystem-safe
-            safe_shorthand = "".join(c for c in topic_shorthand if c.isalnum() or c in (' ', '-', '_')).rstrip()
-            safe_shorthand = safe_shorthand.replace(' ', '_')
-        else:
-            # Fallback: use a generic identifier if no shorthand provided
-            safe_shorthand = "grad_bot_analysis"
-        
-        # Create topic-specific folder with format: <shorthand>_<timestamp>
+        # Create folder for this grad bot run
+        # Use generic naming since we don't know the topic yet
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        topic_folder_name = f"{safe_shorthand}_{timestamp}"
+        topic_folder_name = f"grad_bot_analysis_{timestamp}"
         topic_folder_path = self.output_dir / topic_folder_name
         topic_folder_path.mkdir(exist_ok=True)
         
@@ -805,7 +790,7 @@ grad_bot_type: "research_assistant"
                     model = self.load_grad_bot_model_config()
                     
                     # Save the analysis to the shared topic folder
-                    output_path = self.save_grad_notes(analysis, str(weekly_file), topic_shorthand, topic_folder_path, model)
+                    output_path = self.save_grad_notes(analysis, str(weekly_file), topic_folder_path, model)
                     
                     results.append({
                         'week_file': str(weekly_file),
@@ -1287,14 +1272,12 @@ def extract_private(users, limit, output, weekly_chunks):
     user_emails = [email.strip() for email in users.split(',')]
     email = os.getenv('ZULIP_EMAIL')
     extractor = ZulipExtractor(api_key, site_url, email)
-    
     with Progress(
         SpinnerColumn(),
         TextColumn("[progress.description]{task.description}"),
         console=console
     ) as progress:
         task = progress.add_task("Extracting messages...", total=None)
-        
         try:
             messages = extractor.extract_private_messages(user_emails, limit)
             progress.update(task, description=f"Found {len(messages)} messages")
@@ -1382,8 +1365,7 @@ model: "{model}"
 
 @cli.command()
 @click.option('--weekly-dir', required=True, help='Path to directory containing weekly chunk files')
-@click.option('--topic-shorthand', required=True, help='Short identifier for the topic (used in filenames)')
-def run_grad_bots(weekly_dir, topic_shorthand):
+def run_grad_bots(weekly_dir):
     """Run grad bot analysis on all weekly conversation chunks"""
     claude_api_key = os.getenv('CLAUDE_API_KEY')
     
@@ -1398,7 +1380,7 @@ def run_grad_bots(weekly_dir, topic_shorthand):
         console.print(f"[blue]Starting grad bot analysis...[/blue]")
         console.print(f"[blue]Weekly directory: {weekly_dir}[/blue]")
         
-        results = grad_bot.process_all_weekly_chunks(weekly_dir, topic_shorthand)
+        results = grad_bot.process_all_weekly_chunks(weekly_dir)
         
         # Show summary
         if results:

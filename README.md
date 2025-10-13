@@ -39,11 +39,11 @@ CLAUDE_API_KEY=your-claude-api-key
 uv run python main.py extract-private --limit 1000 --weekly-chunks
 
 # Step 2: Run grad bots on all weekly chunks
-uv run python main.py run-grad-bots --weekly-dir "conversations/weekly" --topic-shorthand "nietzsche"
+uv run python main.py run-grad-bots --weekly-dir "conversations/weekly"
 
 # Step 3: Generate final paper (automatically runs research assistant + professor bot)
 uv run python main.py generate-paper-from-notes \
-  --notes-folder "grad_notes/nietzsche_20250827_112230" \
+  --notes-folder "grad_notes/grad_bot_analysis_20250827_112230" \
   --topic "This paper examines how Buffy the Vampire Slayer's episode 'Gingerbread' (3.11), paired with 
   'Amends' (3.10), functions as a sophisticated philosophical treatise that weaves together Nietzschean 
   ethics, Freudian psychoanalysis, and feminist-queer theory" \
@@ -76,7 +76,7 @@ papers/
         └── 3x11 Gingerbread.txt
 
 grad_notes/
-└── nietzsche_20250827_112230/    # Grad bot analysis (multi-bot workflow only)
+└── grad_bot_analysis_20250827_112230/    # Grad bot analysis 
     ├── 2025-07-20.md
     └── 2025-07-27.md
 
@@ -95,7 +95,6 @@ conversations/
 
 ### Run Grad Bots
 - `--weekly-dir`: Directory containing weekly chunk files
-- `--topic-shorthand`: Short identifier for folder naming
 
 ### Generate Paper from Notes (Multi-Bot)
 - `--notes-folder`: Path to grad bot notes folder

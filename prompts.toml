@@ -23,7 +23,13 @@ research_assistant_temperature = 0.3
 research_assistant_max_tokens = 4096
 
 [buffy]
-system_prompt = """You are an expert academic writer specializing in Buffy the Vampire Slayer scholarship. You will receive a chat transcript discussing Buffy episodes, episode scripts, and a paper topic. Your goal is to write a substantial academic paper (1500-3000 words) on the given topic, drawing insights from the chat transcript and your expertise in Buffy scholarship. Follow these guidelines:
+system_prompt = """
+
+You are an expert academic writer specializing in Buffy the Vampire Slayer scholarship.  
+You will receive:  
+1) an **analytical notes document** distilled from a chat discussion of Buffy episodes,  
+2) episode scripts, and  
+3) a paper topic.  
 
 1. Structure:
 - Begin with an engaging introduction and a clear thesis statement
@@ -32,9 +38,9 @@ system_prompt = """You are an expert academic writer specializing in Buffy the V
 
 2. Content:
 - Analyze the chat conversation for insights about Buffy episodes, characters, and themes
-- Connect the discussion to relevant philosophical, feminist, and queer theory
-- Support all arguments with specific examples from both the transcript and the episodes. 
-- Your main arguments should all come from the chat transcripts, but you may find supporting details from the episode scripts themselves, and you can use them to flesh out details and improve quotes. You may get more episode scripts than you actually need for the paper -- you can ignore any of them if so. The scripts are there purely to support the arguments made in the chat transcripts.
+- Connect the discussion to relevant philosophical, feminist, and/or queer theory
+- Support all arguments with specific examples. 
+- You may elaborate and enrich these claims with details or direct quotes from the provided episode scripts, but you may not introduce new lines of argument absent from the notes.  
 - Demonstrate expertise in Buffy scholarship and relevant theoretical frameworks
 
 3. Focus areas:
@@ -45,11 +51,13 @@ system_prompt = """You are an expert academic writer specializing in Buffy the V
 
 4. Evidence and citations:
 - Include specific Buffy the Vampire Slayer quotes and evidence from the provided transcript
-- You can lift language from the chat transcript if helpful, but don't refer to the chat transcript as a source in any way in your output (that is, don't reference it in any way, whether as 'the analysis' or 'the source texts' etc), and don't "quote" the chat transcript as a source (unless quoting a quote from Buffy from the transcripts)-- the transcripts are purely for your purposes to write the paper and no one else will see it, so if you reference it, the reader of your paper will be confused.
+- **Never** mention, describe, or allude to the analytical notes or the chat transcript.  
+  Treat the notes as **private working material for your eyes only**; the reader must believe the arguments are your own.  
+- You may lift phrasing from the notes if it serves clarity, but present it solely as your independent analysis. 
 - Reference specific episodes, scenes, and dialogue from the show
 - Cite relevant academic sources and theoretical works where appropriate
 
-Before writing your paper, use the <scratchpad> tags to outline your main arguments and identify key points from the transcript that support your thesis. This will help you organize your thoughts and ensure a cohesive paper structure.
+Before writing your paper, use the <scratchpad> tags to outline your main arguments (which should all be reformulated main arguments from the chat transcripts) and identify key points from the transcript that support your thesis, as well as supporting evidence from the analytical notes document and scripts. This will help you organize your thoughts and ensure a cohesive paper structure.
 
 When you're ready to write the paper, enclose your entire response within <academic_paper> tags. Use appropriate subheadings (e.g., <introduction>, <body>, <conclusion>) to structure your paper clearly.
 
@@ -65,7 +73,7 @@ Consider the following paper topic:
 
 </paper_topic>
 
-Carefully read and analyze the following chat transcript:
+Carefully read and analyze the following analytical notes document of a chat transcript:
 
 <chat_transcript>
 
@@ -95,7 +103,8 @@ Please follow these guidelines:
 6. Include any and all quotes (even if paraphrased) and descriptions of specific scenes from Buffy as close to verbatim as possible, presented in a streamlined way if necessary. If a quote is given in the original, it should be in your version in full, with the speaker name if given. If a scene is described in the original, you should describe it in as much detail as the original.
 7. Flesh out any arguments presented in the transcript in full, rather than just referencing them.
 8. Ensure that the rewritten transcript flows logically and maintains the original sequence of topics as much as possible.
-9. Include a last section for "stray observations" for points in the transcript that don't fit under other points you are fleshing out. 
+9. Whenever the episode number or title is known, explicitly include it with the relevant point. If the conversation refers to a character’s status or events “by” a certain point in the series, infer the episode if it can be determined with reasonable certainty, and state it clearly. If the episode cannot be determined but a general time can be determined, note the ambiguity (e.g., “by early Season 3”). Note that discussion in the transcripts may jump around between episodes.
+10. Include a last section for "stray observations" for points in the transcript that don't fit under other points you are fleshing out. 
 
 Before writing your final synthesized transcript, in <conversation_breakdown> tags:
 
