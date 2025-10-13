@@ -41,6 +41,12 @@ uv run python main.py extract-private --limit 1000 --weekly-chunks
 # Step 2: Run grad bots on all weekly chunks
 uv run python main.py run-grad-bots --weekly-dir "conversations/weekly"
 
+# Alternate step 2 -- you can also re-run the grad bots for one week, e.g:
+# uv run python main.py run-grad-bots \
+#   --weekly-dir "conversations/weekly" \
+#   --specific-week "2025-09-28" \
+#   --output-folder "grad_notes/grad_bot_analysis_20251013_144539"
+
 # Step 3: Generate final paper (automatically runs research assistant + professor bot)
 uv run python main.py generate-paper-from-notes \
   --notes-folder "grad_notes/grad_bot_analysis_20250827_112230" \
@@ -49,6 +55,7 @@ uv run python main.py generate-paper-from-notes \
   ethics, Freudian psychoanalysis, and feminist-queer theory" \
   --topic-shorthand "nietzsche"
 ```
+
 
 ### Direct Approach
 
