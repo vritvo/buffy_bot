@@ -67,7 +67,8 @@ class Message:
     """Simple message data structure"""
     content: str
     sender: str
-    timestamp: str
+    timestamp: int
+    message_id: int
 
 
 class ZulipExtractor:
@@ -163,7 +164,8 @@ site = {site_url}
                 message = Message(
                     content=msg['content'],
                     sender=msg.get('sender_full_name', 'Unknown'),
-                    timestamp=msg['timestamp']
+                    timestamp=msg['timestamp'],
+                    message_id=msg['id']
                 )
                 messages.append(message)
         
@@ -173,16 +175,76 @@ site = {site_url}
         """Extract messages from a private conversation using email addresses"""
         messages = []
         
+        # Zulip API has a maximum limit of 5000 messages per request
+        max_batch_size = 5000
+        
+        if limit <= max_batch_size:
+            # Single request for smaller limits
+            return self._extract_private_messages_batch(user_emails, limit, 'newest')
+        else:
+            # Multiple requests for larger limits
+            console.print(f"[yellow]Requesting {limit} messages in batches (max {max_batch_size} per batch)[/yellow]")
+            
+            remaining = limit
+            anchor = 'newest'
+            
+            while remaining > 0:
+                batch_size = min(remaining, max_batch_size)
+                console.print(f"[blue]Fetching batch of {batch_size} messages (anchor: {anchor})[/blue]")
+                
+                batch_messages = self._extract_private_messages_batch(user_emails, batch_size, anchor)
+                
+                if not batch_messages:
+                    console.print("[yellow]No more messages found, stopping batch retrieval[/yellow]")
+                    break
+                
+                messages.extend(batch_messages)
+                remaining -= len(batch_messages)
+                
+                # Update anchor to the oldest message ID in this batch for the next request
+                if batch_messages:
+                    # Sort messages by message ID to find the oldest (smallest ID)
+                    sorted_messages = sorted(batch_messages, key=lambda m: m.message_id)
+                    oldest_message = sorted_messages[0]
+                    # For the next batch, we want messages older than this one
+                    # Use the message ID as anchor
+                    anchor = oldest_message.message_id
+                    console.print(f"[blue]Retrieved {len(batch_messages)} messages, {remaining} remaining. Next anchor: {anchor}[/blue]")
+                
+                # If we got fewer messages than requested, we've reached the end
+                if len(batch_messages) < batch_size:
+                    console.print("[blue]Reached end of conversation[/blue]")
+                    break
+            
+            console.print(f"[green]Total messages retrieved: {len(messages)}[/green]")
+            return messages
+    
+    def _extract_private_messages_batch(self, user_emails: List[str], limit: int, anchor) -> List[Message]:
+        """Extract a single batch of private messages"""
+        messages = []
+        
         # For private messages, we can use the email directly in the narrow
         # The Zulip API accepts email addresses for pm-with operator
-        request = {
-            'anchor': 'newest',
-            'num_before': limit,
-            'num_after': 0,
-            'narrow': [
-                {'operator': 'pm-with', 'operand': ','.join(user_emails)}
-            ]
-        }
+        if anchor == 'newest':
+            request = {
+                'anchor': 'newest',
+                'num_before': limit,
+                'num_after': 0,
+                'narrow': [
+                    {'operator': 'pm-with', 'operand': ','.join(user_emails)}
+                ]
+            }
+        else:
+            # For subsequent batches, use the message ID anchor to get older messages
+            # We want messages BEFORE this message ID (older messages)
+            request = {
+                'anchor': anchor - 1,  # Subtract 1 to avoid including the anchor message itself
+                'num_before': limit,
+                'num_after': 0,
+                'narrow': [
+                    {'operator': 'pm-with', 'operand': ','.join(user_emails)}
+                ]
+            }
         
         result = self.client.get_messages(request)
         
@@ -199,11 +261,12 @@ site = {site_url}
                 message = Message(
                     content=msg['content'],
                     sender=msg.get('sender_full_name', 'Unknown'),
-                    timestamp=msg['timestamp']
+                    timestamp=msg['timestamp'],
+                    message_id=msg['id']
                 )
                 messages.append(message)
         else:
-            print(result['msg'])
+            console.print(f"[red]Error in batch request: {result['msg']}[/red]")
         
         return messages
     
@@ -1247,7 +1310,7 @@ def extract_stream(stream, topic, limit, output):
 
 @cli.command()
 @click.option('--users', help='Comma-separated list of user emails (if not provided, uses default from env)')
-@click.option('--limit', default=1000, help='Maximum number of messages to extract')
+@click.option('--limit', default=1000, help='Maximum number of messages to extract (automatically batched for limits > 5000)')
 @click.option('--output', help='Output filename (default: private_conversation.json)')
 @click.option('--weekly-chunks', is_flag=True, help='Also split conversation into weekly chunks for multi-LLM processing')
 def extract_private(users, limit, output, weekly_chunks):
