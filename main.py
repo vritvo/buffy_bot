@@ -881,6 +881,109 @@ grad_bot_type: "research_assistant"
         
         return results
 
+    def process_specific_weekly_chunk(self, weekly_dir: str, specific_week: str, output_folder: str = None):
+        """Process a specific weekly chunk and save to an existing or new folder"""
+        weekly_path = Path(weekly_dir)
+        if not weekly_path.exists():
+            raise FileNotFoundError(f"Weekly directory not found: {weekly_dir}")
+        
+        # Find the specific weekly file
+        weekly_file_pattern = f"*_week_{specific_week}.txt"
+        weekly_files = list(weekly_path.glob(weekly_file_pattern))
+        
+        if not weekly_files:
+            console.print(f"[red]No weekly file found for week {specific_week} in {weekly_dir}[/red]")
+            console.print(f"[yellow]Looking for pattern: {weekly_file_pattern}[/yellow]")
+            # Show available weeks
+            available_weeks = []
+            for f in weekly_path.glob("*_week_*.txt"):
+                week_part = f.stem.split("week_", 1)[1] if "week_" in f.stem else "unknown"
+                available_weeks.append(week_part)
+            if available_weeks:
+                console.print(f"[blue]Available weeks: {', '.join(sorted(set(available_weeks)))}[/blue]")
+            return []
+        
+        weekly_file = weekly_files[0]  # Should only be one match
+        console.print(f"[blue]Found weekly file: {weekly_file}[/blue]")
+        
+        # Determine output folder
+        if output_folder:
+            # Use existing folder
+            topic_folder_path = Path(output_folder)
+            if not topic_folder_path.exists():
+                raise FileNotFoundError(f"Output folder not found: {output_folder}")
+            console.print(f"[blue]Using existing output folder: {topic_folder_path}[/blue]")
+        else:
+            # Create new folder for this grad bot run
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            topic_folder_name = f"grad_bot_analysis_{timestamp}"
+            topic_folder_path = self.output_dir / topic_folder_name
+            topic_folder_path.mkdir(exist_ok=True)
+            console.print(f"[blue]Created new output folder: {topic_folder_path}[/blue]")
+        
+        # Log the grad bot execution with prompts and settings (only if creating new folder)
+        if not output_folder:
+            system_prompt, user_prompt_template = self.load_grad_bot_prompts()
+            model = self.load_grad_bot_model_config()
+            api_settings = self.load_grad_bot_api_settings()
+            
+            prompt_hash = self.logger.log_grad_bot_execution(
+                system_prompt=system_prompt,
+                user_prompt_template=user_prompt_template,
+                model=model,
+                temperature=api_settings['temperature'],
+                max_tokens=api_settings['max_tokens'],
+                result_folder_name=topic_folder_path.name
+            )
+            
+            console.print(f"[blue]Logged grad bot run with prompt hash: {prompt_hash}[/blue]")
+        
+        results = []
+        
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            console=console
+        ) as progress:
+            
+            task = progress.add_task(f"Processing week: {weekly_file.name}", total=None)
+            
+            try:
+                # Analyze the weekly chunk
+                analysis = self.analyze_weekly_chunk(str(weekly_file))
+                
+                # Get model for metadata
+                model = self.load_grad_bot_model_config()
+                
+                # Save the analysis to the specified folder
+                output_path = self.save_grad_notes(analysis, str(weekly_file), topic_folder_path, model)
+                
+                results.append({
+                    'week_file': str(weekly_file),
+                    'analysis_file': str(output_path),
+                    'success': True
+                })
+                
+                progress.update(task, description=f"✓ Completed: {weekly_file.name}")
+                
+            except Exception as e:
+                console.print(f"[red]Error processing {weekly_file.name}: {e}[/red]")
+                results.append({
+                    'week_file': str(weekly_file),
+                    'error': str(e),
+                    'success': False
+                })
+                
+                progress.update(task, description=f"✗ Failed: {weekly_file.name}")
+        
+        # Summary
+        successful = sum(1 for r in results if r['success'])
+        console.print(f"\n[green]Grad bot analysis complete![/green]")
+        console.print(f"[blue]Successfully processed: {successful}/1 week[/blue]")
+        console.print(f"[blue]Notes saved to: {topic_folder_path}[/blue]")
+        
+        return results
+
 
 class ResearchAssistantBot:
     """Research assistant bot for identifying most relevant episodes for a paper topic"""
@@ -1428,8 +1531,10 @@ model: "{model}"
 
 @cli.command()
 @click.option('--weekly-dir', required=True, help='Path to directory containing weekly chunk files')
-def run_grad_bots(weekly_dir):
-    """Run grad bot analysis on all weekly conversation chunks"""
+@click.option('--specific-week', help='Specific week to rerun (e.g., "2025-07-20"). If provided, only this week will be processed.')
+@click.option('--output-folder', help='Existing grad_bot_analysis folder to save results to (e.g., "grad_notes/grad_bot_analysis_20251013_144539")')
+def run_grad_bots(weekly_dir, specific_week, output_folder):
+    """Run grad bot analysis on all weekly conversation chunks or a specific week"""
     claude_api_key = os.getenv('CLAUDE_API_KEY')
     
     if not claude_api_key:
@@ -1440,10 +1545,22 @@ def run_grad_bots(weekly_dir):
     grad_bot = GradBot(claude_api_key)
     
     try:
-        console.print(f"[blue]Starting grad bot analysis...[/blue]")
-        console.print(f"[blue]Weekly directory: {weekly_dir}[/blue]")
-        
-        results = grad_bot.process_all_weekly_chunks(weekly_dir)
+        if specific_week:
+            # Process only the specific week
+            console.print(f"[blue]Starting grad bot analysis for specific week: {specific_week}[/blue]")
+            console.print(f"[blue]Weekly directory: {weekly_dir}[/blue]")
+            if output_folder:
+                console.print(f"[blue]Output folder: {output_folder}[/blue]")
+            
+            results = grad_bot.process_specific_weekly_chunk(weekly_dir, specific_week, output_folder)
+        else:
+            # Process all weekly chunks (original behavior)
+            console.print(f"[blue]Starting grad bot analysis for all weeks...[/blue]")
+            console.print(f"[blue]Weekly directory: {weekly_dir}[/blue]")
+            if output_folder:
+                console.print(f"[yellow]Warning: --output-folder is ignored when processing all weeks (creates new folder)[/yellow]")
+            
+            results = grad_bot.process_all_weekly_chunks(weekly_dir)
         
         # Show summary
         if results:
