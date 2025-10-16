@@ -39,12 +39,12 @@ def estimate_token_count(text: str) -> int:
     return len(text) // 4
 
 
-def wait_for_rate_limit(estimated_input_tokens: int, tokens_per_minute_limit: int = 25000, enabled: bool = True):
+def wait_for_rate_limit(estimated_input_tokens: int, tokens_per_minute_limit: int = 20000, enabled: bool = True):
     """Wait if necessary to respect rate limits.
     
     Args:
         estimated_input_tokens: Estimated number of input tokens for the next request
-        tokens_per_minute_limit: Maximum tokens allowed per minute (default: 25000)
+        tokens_per_minute_limit: Maximum tokens allowed per minute (default: 20000, conservative limit)
         enabled: Whether rate limiting is enabled (default: True)
     """
     if not enabled:
@@ -66,13 +66,30 @@ def wait_for_rate_limit(estimated_input_tokens: int, tokens_per_minute_limit: in
         if time_until_next_minute > 0:
             console.print(f"[yellow]Rate limit approached ({_tokens_used_in_current_minute + estimated_input_tokens}/{tokens_per_minute_limit} tokens)[/yellow]")
             console.print(f"[yellow]Waiting {time_until_next_minute:.1f} seconds for rate limit reset...[/yellow]")
-            time.sleep(time_until_next_minute + 1)  # Add 1 second buffer
+            time.sleep(time_until_next_minute + 2)  # Add 2 second buffer for safety
             # Reset after waiting
             _tokens_used_in_current_minute = 0
             _minute_start_time = time.time()
     
-    # Track this request
-    _tokens_used_in_current_minute += estimated_input_tokens
+    # For very large requests that exceed even a fresh minute's limit, spread them out
+    if estimated_input_tokens > tokens_per_minute_limit:
+        # This is a single huge request - we need to wait between chunks
+        num_chunks = (estimated_input_tokens + tokens_per_minute_limit - 1) // tokens_per_minute_limit
+        console.print(f"[yellow]Large request ({estimated_input_tokens:,} tokens) detected[/yellow]")
+        console.print(f"[yellow]This would require ~{num_chunks} minutes to process safely[/yellow]")
+        
+        # Wait for the full time needed, spreading the tokens across multiple minutes
+        for i in range(num_chunks - 1):
+            console.print(f"[yellow]Waiting 62 seconds before chunk {i+2}/{num_chunks}...[/yellow]")
+            time.sleep(62)  # 60 seconds + 2 second buffer
+        
+        # Reset tracking for the final chunk
+        _tokens_used_in_current_minute = estimated_input_tokens % tokens_per_minute_limit
+        _minute_start_time = time.time()
+    else:
+        # Track this request normally
+        _tokens_used_in_current_minute += estimated_input_tokens
+    
     _last_api_call_time = time.time()
 
 
@@ -1785,8 +1802,8 @@ class ProfessorBot:
         estimated_input_tokens = estimate_token_count(system_prompt + user_prompt)
         console.print(f"[blue]Estimated input tokens: ~{estimated_input_tokens:,}[/blue]")
         
-        # Wait for rate limit if necessary (25k tokens/minute)
-        wait_for_rate_limit(estimated_input_tokens, tokens_per_minute_limit=25000)
+        # Wait for rate limit if necessary (20k tokens/minute conservative limit)
+        wait_for_rate_limit(estimated_input_tokens, tokens_per_minute_limit=20000)
         
         console.print(f"[yellow]Generating paper using model: {model}[/yellow]")
         
@@ -1970,7 +1987,7 @@ The rewritten paper should:
         console.print(f"[blue]Estimated input tokens: ~{estimated_input_tokens:,}[/blue]")
         
         # Wait for rate limit if necessary
-        wait_for_rate_limit(estimated_input_tokens, tokens_per_minute_limit=25000, enabled=True)
+        wait_for_rate_limit(estimated_input_tokens, tokens_per_minute_limit=20000, enabled=True)
         
         console.print(f"[yellow]Rewriting paper based on reviews using model: {model}[/yellow]")
         
@@ -2283,8 +2300,8 @@ REVIEW CONSIDERATION: Maintain a balanced but slightly positive perspective in y
         estimated_input_tokens = estimate_token_count(system_prompt + user_prompt)
         console.print(f"[blue]Estimated input tokens: ~{estimated_input_tokens:,}[/blue]")
         
-        # Wait for rate limit if necessary (25k tokens/minute)
-        wait_for_rate_limit(estimated_input_tokens, tokens_per_minute_limit=25000, enabled=True)
+        # Wait for rate limit if necessary (20k tokens/minute conservative limit)
+        wait_for_rate_limit(estimated_input_tokens, tokens_per_minute_limit=20000, enabled=True)
         
         console.print(f"[yellow]Generating review #{review_number} using model: {model}[/yellow]")
         
@@ -2518,8 +2535,8 @@ class ResearcherBot:
         estimated_input_tokens = estimate_token_count(system_prompt + user_prompt)
         console.print(f"[blue]Estimated input tokens: ~{estimated_input_tokens:,}[/blue]")
         
-        # Wait for rate limit if necessary (25k tokens/minute)
-        wait_for_rate_limit(estimated_input_tokens, tokens_per_minute_limit=25000, enabled=True)
+        # Wait for rate limit if necessary (20k tokens/minute conservative limit)
+        wait_for_rate_limit(estimated_input_tokens, tokens_per_minute_limit=20000, enabled=True)
         
         console.print(f"[yellow]Generating paper abstracts using model: {model}[/yellow]")
         
@@ -3440,6 +3457,258 @@ def researcher_bot(notes_folder):
         
     except Exception as e:
         console.print(f"[red]Error: {e}[/red]")
+
+
+@cli.command()
+@click.option('--notes-folder', help='Path to folder containing grad bot notes. If not provided, uses most recent folder.')
+@click.option('--min-abstract-rating', default=0, type=int, help='Minimum abstract rating (0-100) for generating papers (default: 0)')
+@click.option('--num-reviews', default=3, type=int, help='Number of reviewers per review round (default: 3)')
+@click.option('--max-revision-rounds', default=10, type=int, help='Maximum number of revision rounds before giving up (default: 10)')
+@click.option('--min-rating', default=30, type=int, help='Minimum postdoc rating (0-100) for including weekly notes (default: 30)')
+@click.option('--max-scripts', default=5, type=int, help='Maximum number of episode scripts to copy (default: 5)')
+@click.option('--verbatim-chat-threshold', default=70, type=int, help='Rating threshold for using verbatim transcripts (default: 70)')
+@click.option('--weekly-conversations', default='conversations/weekly', help='Path to weekly conversation folder (default: conversations/weekly)')
+def run_conference(notes_folder, min_abstract_rating, num_reviews, max_revision_rounds, min_rating, max_scripts, verbatim_chat_threshold, weekly_conversations):
+    """Run a complete academic conference simulation: generate papers from abstracts, review, and revise until all papers are accepted
+    
+    This command automates the full paper lifecycle:
+    1. Generates papers from researcher bot abstracts (--from-abstracts)
+    2. Reviews each paper with multiple peer reviewers
+    3. Rewrites papers based on feedback if any reviews are REJECT
+    4. Continues revision cycles until all reviews are ACCEPT
+    5. Repeats for all papers meeting the rating threshold
+    
+    The chaotic academic filename system means later revisions have higher acceptance rates!
+    """
+    claude_api_key = os.getenv('CLAUDE_API_KEY')
+    
+    if not claude_api_key:
+        console.print("[red]Error: CLAUDE_API_KEY must be set in environment variables[/red]")
+        console.print("[yellow]Add CLAUDE_API_KEY=your-api-key to your .env file[/yellow]")
+        return
+    
+    # Validate parameters
+    if num_reviews < 1:
+        console.print(f"[red]Error: --num-reviews must be at least 1, got {num_reviews}[/red]")
+        return
+    
+    if max_revision_rounds < 1:
+        console.print(f"[red]Error: --max-revision-rounds must be at least 1, got {max_revision_rounds}[/red]")
+        return
+    
+    # Use most recent folder if not provided
+    if not notes_folder:
+        notes_folder = str(get_most_recent_grad_notes_folder())
+    
+    # Load abstracts from JSON file
+    notes_path = Path(notes_folder)
+    abstracts_file = notes_path / "paper_abstracts.json"
+    
+    if not abstracts_file.exists():
+        console.print(f"[red]Error: paper_abstracts.json not found in {notes_folder}[/red]")
+        console.print(f"[yellow]Run 'uv run main.py researcher-bot' first to generate abstracts[/yellow]")
+        return
+    
+    console.print(f"[blue]Loading abstracts from: {abstracts_file}[/blue]")
+    
+    with open(abstracts_file, 'r', encoding='utf-8') as f:
+        abstracts_data = json.load(f)
+    
+    abstracts = abstracts_data.get('abstracts', [])
+    
+    if not abstracts:
+        console.print(f"[yellow]No abstracts found in {abstracts_file}[/yellow]")
+        return
+    
+    # Filter abstracts by rating
+    filtered_abstracts = [
+        a for a in abstracts 
+        if a.get('rating', 0) >= min_abstract_rating
+    ]
+    
+    if not filtered_abstracts:
+        console.print(f"[yellow]No abstracts meet the minimum rating threshold of {min_abstract_rating}/100[/yellow]")
+        return
+    
+    # Sort by rating (highest first)
+    sorted_abstracts = sorted(filtered_abstracts, key=lambda x: x.get('rating', 0), reverse=True)
+    
+    console.print(f"\n[cyan]{'='*80}[/cyan]")
+    console.print(f"[cyan]BUFFY STUDIES CONFERENCE SIMULATION[/cyan]")
+    console.print(f"[cyan]{'='*80}[/cyan]\n")
+    console.print(f"[blue]Papers to submit: {len(sorted_abstracts)}[/blue]")
+    console.print(f"[blue]Reviewers per round: {num_reviews}[/blue]")
+    console.print(f"[blue]Max revision rounds: {max_revision_rounds}[/blue]")
+    console.print(f"[blue]Notes folder: {notes_folder}[/blue]\n")
+    
+    # Track conference statistics
+    conference_stats = {
+        'total_papers': len(sorted_abstracts),
+        'accepted_papers': [],
+        'failed_papers': [],
+        'total_reviews_generated': 0,
+        'total_revisions': 0
+    }
+    
+    # Process each abstract
+    for paper_idx, abstract_entry in enumerate(sorted_abstracts, 1):
+        title = abstract_entry.get('title', f'Untitled Abstract {paper_idx}')
+        abstract_text = abstract_entry.get('abstract', '')
+        rating = abstract_entry.get('rating', 0)
+        
+        console.print(f"\n[cyan]{'='*80}[/cyan]")
+        console.print(f"[cyan]PAPER {paper_idx}/{len(sorted_abstracts)}: {title}[/cyan]")
+        console.print(f"[cyan]Abstract Rating: {rating}/100[/cyan]")
+        console.print(f"[cyan]{'='*80}[/cyan]\n")
+        
+        try:
+            # Step 1: Generate initial paper
+            console.print(f"[yellow]>>> GENERATING INITIAL SUBMISSION <<<[/yellow]\n")
+            
+            title_shorthand = "".join(c for c in title if c.isalnum() or c in (' ', '-', '_')).rstrip()
+            title_shorthand = title_shorthand.replace(' ', '_')[:50]
+            
+            current_paper_folder = create_paper_folder(title_shorthand, notes_folder)
+            console.print(f"[blue]Created paper folder: {current_paper_folder}[/blue]")
+            
+            # Run postdoc bot
+            console.print(f"[blue]Running postdoc bot...[/blue]")
+            postdoc_bot_instance = PostdocBot(claude_api_key)
+            postdoc_bot_instance.rate_all_notes(notes_folder, abstract_text, current_paper_folder)
+            
+            # Run research assistant
+            console.print(f"[blue]Running research assistant...[/blue]")
+            research_assistant_bot = ResearchAssistantBot(claude_api_key)
+            episode_list, copied_files, _ = research_assistant_bot.select_relevant_episodes_and_copy_scripts(
+                notes_folder, abstract_text, title_shorthand, current_paper_folder, max_scripts
+            )
+            
+            # Run professor bot
+            console.print(f"[blue]Running professor bot...[/blue]")
+            professor_bot = ProfessorBot(claude_api_key)
+            paper_content = professor_bot.generate_paper(
+                notes_folder, current_paper_folder, abstract_text, min_rating,
+                verbatim_chat_threshold, weekly_conversations
+            )
+            
+            output_path = professor_bot.save_paper(paper_content, title, current_paper_folder, notes_folder, min_rating=min_rating)
+            console.print(f"[green]✓ Initial paper generated: {output_path}[/green]\n")
+            
+            # Step 2: Review and revision loop
+            reviewer_bot_instance = ReviewerBot(claude_api_key)
+            revision_round = 0
+            all_accepted = False
+            
+            while not all_accepted and revision_round < max_revision_rounds:
+                revision_round += 1
+                console.print(f"\n[yellow]>>> REVIEW ROUND {revision_round} <<<[/yellow]\n")
+                
+                # Generate reviews
+                reviews_data = reviewer_bot_instance.review_paper(str(current_paper_folder), num_reviews)
+                conference_stats['total_reviews_generated'] += len(reviews_data)
+                
+                # Save reviews
+                reviewer_bot_instance.save_reviews(reviews_data, str(current_paper_folder))
+                
+                # Check if all reviews are ACCEPT
+                accept_count = sum(1 for r in reviews_data if r.get('decision') == 'ACCEPT')
+                reject_count = sum(1 for r in reviews_data if r.get('decision') == 'REJECT')
+                
+                console.print(f"\n[bold]Review Results:[/bold]")
+                console.print(f"[green]  ACCEPT: {accept_count}/{len(reviews_data)}[/green]")
+                console.print(f"[red]  REJECT: {reject_count}/{len(reviews_data)}[/red]")
+                
+                if accept_count == len(reviews_data):
+                    console.print(f"\n[green]{'='*80}[/green]")
+                    console.print(f"[green]✓ PAPER ACCEPTED! All {num_reviews} reviewers approved![/green]")
+                    console.print(f"[green]{'='*80}[/green]\n")
+                    all_accepted = True
+                    conference_stats['accepted_papers'].append({
+                        'title': title,
+                        'rating': rating,
+                        'folder': str(current_paper_folder),
+                        'revision_rounds': revision_round,
+                        'total_reviews': revision_round * num_reviews
+                    })
+                else:
+                    # Need to revise
+                    if revision_round >= max_revision_rounds:
+                        console.print(f"\n[red]{'='*80}[/red]")
+                        console.print(f"[red]✗ PAPER REJECTED - Maximum revision rounds ({max_revision_rounds}) reached[/red]")
+                        console.print(f"[red]{'='*80}[/red]\n")
+                        conference_stats['failed_papers'].append({
+                            'title': title,
+                            'rating': rating,
+                            'folder': str(current_paper_folder),
+                            'revision_rounds': revision_round,
+                            'reason': 'max_revisions_reached'
+                        })
+                        break
+                    
+                    console.print(f"\n[yellow]>>> REVISING PAPER (Revision {revision_round}) <<<[/yellow]\n")
+                    conference_stats['total_revisions'] += 1
+                    
+                    # Rewrite the paper
+                    paper_content, new_paper_folder, version = professor_bot.rewrite_paper(
+                        original_paper_folder=current_paper_folder,
+                        notes_folder=notes_folder,
+                        topic=title,
+                        min_rating=min_rating,
+                        verbatim_chat_threshold=verbatim_chat_threshold,
+                        weekly_conversations_folder=weekly_conversations
+                    )
+                    
+                    # Save the rewritten paper with chaotic filename
+                    output_path = professor_bot.save_paper(
+                        content=paper_content,
+                        topic=title,
+                        paper_folder=new_paper_folder,
+                        notes_folder=notes_folder,
+                        min_rating=min_rating,
+                        is_rewrite=True,
+                        original_folder=str(current_paper_folder),
+                        version=version
+                    )
+                    
+                    console.print(f"[green]✓ Revision {revision_round} completed: {output_path}[/green]")
+                    console.print(f"[blue]New paper folder: {new_paper_folder}[/blue]\n")
+                    
+                    # Update current paper folder for next review round
+                    current_paper_folder = new_paper_folder
+        
+        except Exception as e:
+            console.print(f"[red]Error processing paper '{title}': {e}[/red]\n")
+            conference_stats['failed_papers'].append({
+                'title': title,
+                'rating': rating,
+                'folder': str(current_paper_folder) if 'current_paper_folder' in locals() else 'N/A',
+                'error': str(e)
+            })
+    
+    # Final conference summary
+    console.print(f"\n[cyan]{'='*80}[/cyan]")
+    console.print(f"[cyan]CONFERENCE FINAL RESULTS[/cyan]")
+    console.print(f"[cyan]{'='*80}[/cyan]\n")
+    
+    console.print(f"[bold]Overall Statistics:[/bold]")
+    console.print(f"[blue]  Total papers submitted: {conference_stats['total_papers']}[/blue]")
+    console.print(f"[green]  Papers accepted: {len(conference_stats['accepted_papers'])}[/green]")
+    console.print(f"[red]  Papers rejected: {len(conference_stats['failed_papers'])}[/red]")
+    console.print(f"[blue]  Total reviews generated: {conference_stats['total_reviews_generated']}[/blue]")
+    console.print(f"[blue]  Total revisions: {conference_stats['total_revisions']}[/blue]")
+    
+    if conference_stats['accepted_papers']:
+        console.print(f"\n[green]Accepted Papers:[/green]")
+        for paper in conference_stats['accepted_papers']:
+            console.print(f"[green]  ✓ {paper['title']}[/green]")
+            console.print(f"[dim]    Rounds: {paper['revision_rounds']}, Reviews: {paper['total_reviews']}, Folder: {paper['folder']}[/dim]")
+    
+    if conference_stats['failed_papers']:
+        console.print(f"\n[red]Rejected Papers:[/red]")
+        for paper in conference_stats['failed_papers']:
+            console.print(f"[red]  ✗ {paper['title']}[/red]")
+            reason = paper.get('reason', paper.get('error', 'unknown'))
+            console.print(f"[dim]    Reason: {reason}[/dim]")
 
 
 @cli.command()
