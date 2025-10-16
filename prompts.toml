@@ -105,6 +105,7 @@ Please follow these guidelines:
 8. Ensure that the rewritten transcript flows logically and maintains the original sequence of topics as much as possible.
 9. Whenever the episode number or title is known, explicitly include it with the relevant point. If the conversation refers to a character’s status or events “by” a certain point in the series, infer the episode if it can be determined with reasonable certainty, and state it clearly. If the episode cannot be determined but a general time can be determined, note the ambiguity (e.g., “by early Season 3”). Note that discussion in the transcripts may jump around between episodes.
 10. Include a last section for "stray observations" for points in the transcript that don't fit under other points you are fleshing out. 
+11. Importantly, whenever a philosopher is mentioned, *always* include everything related to that part of the conversation, including the philosopher's name. This will be of interest to the professor. 
 
 Before writing your final synthesized transcript, in <conversation_breakdown> tags:
 
