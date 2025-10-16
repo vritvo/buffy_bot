@@ -2266,22 +2266,221 @@ def run_grad_bots(weekly_dir, specific_week, output_folder):
         console.print(f"[red]Error: {e}[/red]")
 
 
+def _generate_papers_from_abstracts(
+    claude_api_key: str,
+    notes_folder: str = None,
+    topic_shorthand: str = None,
+    min_rating: int = 30,
+    max_scripts: int = 5,
+    verbatim_chat_threshold: int = 70,
+    weekly_conversations: str = 'conversations/weekly',
+    min_abstract_rating: int = 0
+):
+    """Helper function to generate papers for all abstracts from researcher bot"""
+    
+    # Use most recent folder if not provided
+    if not notes_folder:
+        notes_folder = str(get_most_recent_grad_notes_folder())
+    
+    # Load abstracts from JSON file
+    notes_path = Path(notes_folder)
+    abstracts_file = notes_path / "paper_abstracts.json"
+    
+    if not abstracts_file.exists():
+        console.print(f"[red]Error: paper_abstracts.json not found in {notes_folder}[/red]")
+        console.print(f"[yellow]Run 'uv run main.py researcher-bot' first to generate abstracts[/yellow]")
+        return
+    
+    console.print(f"[blue]Loading abstracts from: {abstracts_file}[/blue]")
+    
+    with open(abstracts_file, 'r', encoding='utf-8') as f:
+        abstracts_data = json.load(f)
+    
+    abstracts = abstracts_data.get('abstracts', [])
+    
+    if not abstracts:
+        console.print(f"[yellow]No abstracts found in {abstracts_file}[/yellow]")
+        return
+    
+    # Filter abstracts by rating
+    filtered_abstracts = [
+        a for a in abstracts 
+        if a.get('rating', 0) >= min_abstract_rating
+    ]
+    
+    if not filtered_abstracts:
+        console.print(f"[yellow]No abstracts meet the minimum rating threshold of {min_abstract_rating}/100[/yellow]")
+        console.print(f"[blue]Total abstracts: {len(abstracts)}, Filtered: 0[/blue]")
+        return
+    
+    console.print(f"\n[green]{'='*80}[/green]")
+    console.print(f"[green]Generating Papers from Researcher Bot Abstracts[/green]")
+    console.print(f"[green]{'='*80}[/green]\n")
+    console.print(f"[blue]Total abstracts: {len(abstracts)}[/blue]")
+    console.print(f"[blue]Abstracts meeting threshold (>={min_abstract_rating}): {len(filtered_abstracts)}[/blue]")
+    console.print(f"[blue]Notes folder: {notes_folder}[/blue]\n")
+    
+    # Sort by rating (highest first)
+    sorted_abstracts = sorted(filtered_abstracts, key=lambda x: x.get('rating', 0), reverse=True)
+    
+    successful_papers = []
+    failed_papers = []
+    
+    for i, abstract_entry in enumerate(sorted_abstracts, 1):
+        title = abstract_entry.get('title', f'Untitled Abstract {i}')
+        abstract_text = abstract_entry.get('abstract', '')
+        rating = abstract_entry.get('rating', 0)
+        
+        console.print(f"\n[cyan]{'='*80}[/cyan]")
+        console.print(f"[cyan]Paper {i}/{len(sorted_abstracts)}: {title}[/cyan]")
+        console.print(f"[cyan]Rating: {rating}/100[/cyan]")
+        console.print(f"[cyan]{'='*80}[/cyan]\n")
+        
+        try:
+            with Progress(
+                SpinnerColumn(),
+                TextColumn("[progress.description]{task.description}"),
+                console=console
+            ) as progress:
+                
+                # Use most recent folder if not provided
+                if not notes_folder:
+                    notes_folder_resolved = str(get_most_recent_grad_notes_folder())
+                else:
+                    notes_folder_resolved = notes_folder
+                
+                # Create paper folder for this abstract
+                # Use title as shorthand, sanitized
+                title_shorthand = "".join(c for c in title if c.isalnum() or c in (' ', '-', '_')).rstrip()
+                title_shorthand = title_shorthand.replace(' ', '_')[:50]  # Limit length
+                
+                target_paper_folder = create_paper_folder(title_shorthand, notes_folder_resolved)
+                console.print(f"[blue]Created paper folder: {target_paper_folder}[/blue]")
+                
+                # Step 1: Run postdoc bot to rate notes (if not already done)
+                ratings_file = target_paper_folder / "postdoc_ratings.json"
+                if not ratings_file.exists():
+                    task0 = progress.add_task("Running postdoc bot...", total=None)
+                    console.print(f"[blue]Running postdoc bot to rate notes for relevance[/blue]")
+                    
+                    postdoc_bot_instance = PostdocBot(claude_api_key)
+                    postdoc_bot_instance.rate_all_notes(notes_folder_resolved, abstract_text, target_paper_folder)
+                    
+                    progress.update(task0, description="✓ Postdoc bot complete")
+                else:
+                    console.print(f"[blue]Postdoc ratings already exist in {target_paper_folder}, skipping postdoc bot[/blue]")
+                
+                # Step 2: Run research assistant if needed (to get episodes and copy scripts)
+                scripts_dir = target_paper_folder / "scripts"
+                if not (scripts_dir.exists() and list(scripts_dir.glob("*.txt"))):
+                    task1 = progress.add_task("Running research assistant...", total=None)
+                    console.print(f"[blue]Running research assistant to find relevant episodes and copy scripts[/blue]")
+                    console.print(f"[blue]Max scripts to copy: {max_scripts}[/blue]")
+                    
+                    research_assistant_bot = ResearchAssistantBot(claude_api_key)
+                    episode_list, copied_files, _ = research_assistant_bot.select_relevant_episodes_and_copy_scripts(
+                        notes_folder_resolved, abstract_text, title_shorthand, target_paper_folder, max_scripts
+                    )
+                    
+                    console.print(f"[green]✓ Research assistant copied {len(copied_files)} script files[/green]")
+                    progress.update(task1, description="✓ Research assistant complete")
+                else:
+                    console.print(f"[blue]Scripts already exist in {scripts_dir}, skipping research assistant[/blue]")
+                
+                # Step 3: Run professor bot to generate paper
+                task2 = progress.add_task("Running professor bot...", total=None)
+                
+                professor_bot = ProfessorBot(claude_api_key)
+                
+                console.print(f"[blue]Running professor bot to generate paper[/blue]")
+                paper_content = professor_bot.generate_paper(
+                    notes_folder_resolved, target_paper_folder, abstract_text, min_rating,
+                    verbatim_chat_threshold, weekly_conversations
+                )
+                
+                progress.update(task2, description="Saving paper...")
+                
+                # Save the paper
+                output_path = professor_bot.save_paper(paper_content, title, target_paper_folder, notes_folder_resolved, min_rating=min_rating)
+                
+                progress.update(task2, description="✓ Professor bot complete")
+                
+                console.print(f"[green]✓ Paper generated and saved to: {output_path}[/green]")
+                
+                successful_papers.append({
+                    'title': title,
+                    'rating': rating,
+                    'path': str(output_path),
+                    'folder': str(target_paper_folder)
+                })
+                
+        except Exception as e:
+            console.print(f"[red]Error generating paper for '{title}': {e}[/red]")
+            failed_papers.append({
+                'title': title,
+                'rating': rating,
+                'error': str(e)
+            })
+    
+    # Final summary
+    console.print(f"\n[green]{'='*80}[/green]")
+    console.print(f"[green]Batch Paper Generation Complete[/green]")
+    console.print(f"[green]{'='*80}[/green]\n")
+    console.print(f"[blue]Successfully generated: {len(successful_papers)}/{len(sorted_abstracts)} papers[/blue]")
+    
+    if successful_papers:
+        console.print(f"\n[green]Generated papers:[/green]")
+        for paper in successful_papers:
+            console.print(f"[blue]  • {paper['title']}[/blue] (rating: {paper['rating']}/100)")
+            console.print(f"[dim]    {paper['folder']}[/dim]")
+    
+    if failed_papers:
+        console.print(f"\n[red]Failed papers:[/red]")
+        for paper in failed_papers:
+            console.print(f"[red]  • {paper['title']}[/red] (rating: {paper['rating']}/100)")
+            console.print(f"[dim]    Error: {paper['error']}[/dim]")
+
+
 @cli.command()
 @click.option('--notes-folder', help='Path to folder containing grad bot notes (e.g., grad_notes/nietzsche_20250107_120000). If not provided, uses most recent folder.')
-@click.option('--topic', required=True, help='Paper topic/thesis')
+@click.option('--topic', help='Paper topic/thesis (required unless using --from-abstracts)')
 @click.option('--topic-shorthand', help='Short identifier for the topic (used in folder naming if no existing paper folder)')
 @click.option('--paper-folder', help='Path to existing paper folder (if research assistant already created one)')
 @click.option('--min-rating', default=30, type=int, help='Minimum postdoc rating (0-100) for including weekly notes in paper generation (default: 30)')
 @click.option('--max-scripts', default=5, type=int, help='Maximum number of episode scripts to copy (default: 5)')
 @click.option('--verbatim-chat-threshold', default=70, type=int, help='Rating threshold (0-100) for using verbatim transcripts instead of summarized notes (default: 70)')
 @click.option('--weekly-conversations', default='conversations/weekly', help='Path to weekly conversation folder for verbatim transcripts (default: conversations/weekly)')
-def generate_paper(notes_folder, topic, topic_shorthand, paper_folder, min_rating, max_scripts, verbatim_chat_threshold, weekly_conversations):
+@click.option('--from-abstracts', is_flag=True, help='Generate papers for all abstracts from researcher bot (uses paper_abstracts.json)')
+@click.option('--min-abstract-rating', default=0, type=int, help='Minimum abstract rating (0-100) for generating papers when using --from-abstracts (default: 0)')
+def generate_paper(notes_folder, topic, topic_shorthand, paper_folder, min_rating, max_scripts, verbatim_chat_threshold, weekly_conversations, from_abstracts, min_abstract_rating):
     """Generate an academic paper by running postdoc bot, research assistant, and professor bot in sequence"""
     claude_api_key = os.getenv('CLAUDE_API_KEY')
     
     if not claude_api_key:
         console.print("[red]Error: CLAUDE_API_KEY must be set in environment variables[/red]")
         console.print("[yellow]Add CLAUDE_API_KEY=your-api-key to your .env file[/yellow]")
+        return
+    
+    # Validate that either topic or from_abstracts is provided
+    if not from_abstracts and not topic:
+        console.print("[red]Error: Either --topic or --from-abstracts must be provided[/red]")
+        return
+    
+    if from_abstracts and topic:
+        console.print("[yellow]Warning: Both --topic and --from-abstracts provided. Using --from-abstracts (--topic will be ignored)[/yellow]")
+    
+    # If using abstracts, delegate to batch generation function
+    if from_abstracts:
+        _generate_papers_from_abstracts(
+            claude_api_key=claude_api_key,
+            notes_folder=notes_folder,
+            topic_shorthand=topic_shorthand,
+            min_rating=min_rating,
+            max_scripts=max_scripts,
+            verbatim_chat_threshold=verbatim_chat_threshold,
+            weekly_conversations=weekly_conversations,
+            min_abstract_rating=min_abstract_rating
+        )
         return
     
     # Validate min_rating

@@ -11,6 +11,10 @@ Extracts Buffy the Vampire Slayer discussions from Zulip and generates academic 
    - Runs **research assistant** to select relevant episodes
    - Runs **professor bot** to write the paper using filtered notes and scripts
 
+**Optional: Batch Paper Generation**
+- Run **researcher bot** to generate 5-8 paper abstracts/topics
+- Use `generate-paper --from-abstracts` to automatically generate papers for all abstracts
+
 ## Setup
 
 This project uses `uv` for dependency management. Set up your environment variables in a `.env` file:
@@ -54,13 +58,26 @@ uv run main.py generate-paper \
 ## Key Options
 
 ### `generate-paper` (Main Command)
-- `--topic`: Paper topic (required)
+- `--topic`: Paper topic (required unless using `--from-abstracts`)
 - `--notes-folder`: Grad notes folder (default: most recent)
 - `--min-rating`: Min rating to include notes (default: 30)
 - `--max-scripts`: Number of episode scripts to include (default: 5)
 - `--verbatim-chat-threshold`: Rating for using verbatim transcripts (default: 70)
 - `--weekly-conversations`: Path to weekly conversations folder (default: conversations/weekly)
 - `--topic-shorthand`: Short identifier for folder naming
+- `--from-abstracts`: Generate papers for all abstracts from `researcher-bot`
+- `--min-abstract-rating`: Min abstract rating to generate papers for (default: 0, only with `--from-abstracts`)
+
+**Batch Generation from Researcher Bot:**
+```bash
+# Generate papers for ALL abstracts
+uv run main.py generate-paper --from-abstracts
+
+# Generate papers only for abstracts rated 70+
+uv run main.py generate-paper --from-abstracts --min-abstract-rating 70
+```
+
+When using `--from-abstracts`, the command reads `paper_abstracts.json` from the grad notes folder and generates a complete paper for each abstract (or each abstract above the rating threshold). Each paper gets its own folder in `papers/`.
 
 **Note:** Weeks with ratings ≥ `--verbatim-chat-threshold` will use the original verbatim conversation transcript instead of summarized grad notes for higher fidelity.
 
