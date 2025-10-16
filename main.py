@@ -39,13 +39,17 @@ def estimate_token_count(text: str) -> int:
     return len(text) // 4
 
 
-def wait_for_rate_limit(estimated_input_tokens: int, tokens_per_minute_limit: int = 25000):
+def wait_for_rate_limit(estimated_input_tokens: int, tokens_per_minute_limit: int = 25000, enabled: bool = True):
     """Wait if necessary to respect rate limits.
     
     Args:
         estimated_input_tokens: Estimated number of input tokens for the next request
         tokens_per_minute_limit: Maximum tokens allowed per minute (default: 25000)
+        enabled: Whether rate limiting is enabled (default: True)
     """
+    if not enabled:
+        return
+    
     global _last_api_call_time, _tokens_used_in_current_minute, _minute_start_time
     
     current_time = time.time()
@@ -590,10 +594,10 @@ class PaperGenerator:
         user_prompt = user_prompt.replace("{{SCRIPT_TRANSCRIPTS}}", "")  # No scripts for direct approach
         user_prompt = user_prompt.replace("{{PAPER_TOPIC}}", topic)
         
-        # Estimate token count and wait for rate limit if necessary
+        # Estimate token count and wait for rate limit if necessary (disabled by default for legacy direct approach)
         estimated_input_tokens = estimate_token_count(system_prompt + user_prompt)
         console.print(f"[blue]Estimated input tokens: ~{estimated_input_tokens:,}[/blue]")
-        wait_for_rate_limit(estimated_input_tokens, tokens_per_minute_limit=25000)
+        wait_for_rate_limit(estimated_input_tokens, tokens_per_minute_limit=25000, enabled=False)
         
         console.print(f"[yellow]Sending request to Claude using model: {model}[/yellow]")
         
@@ -809,9 +813,9 @@ Remember to maintain all important details while making it more concise and acad
         # Substitute variables in user prompt
         user_prompt = user_prompt_template.replace("{{CONVERSATION_TRANSCRIPT}}", weekly_content)
         
-        # Estimate token count and wait for rate limit if necessary
+        # Estimate token count and wait for rate limit if necessary (disabled by default for grad bot)
         estimated_input_tokens = estimate_token_count(system_prompt + user_prompt)
-        wait_for_rate_limit(estimated_input_tokens, tokens_per_minute_limit=25000)
+        wait_for_rate_limit(estimated_input_tokens, tokens_per_minute_limit=25000, enabled=False)
         
         try:
             response = self.client.messages.create(
@@ -1155,9 +1159,9 @@ class PostdocBot:
         user_prompt = user_prompt_template.replace("{{PAPER_TOPIC}}", topic)
         user_prompt = user_prompt.replace("{{WEEKLY_NOTES}}", weekly_content)
         
-        # Estimate token count and wait for rate limit if necessary
+        # Estimate token count and wait for rate limit if necessary (disabled by default for postdoc bot)
         estimated_input_tokens = estimate_token_count(system_prompt + user_prompt)
-        wait_for_rate_limit(estimated_input_tokens, tokens_per_minute_limit=25000)
+        wait_for_rate_limit(estimated_input_tokens, tokens_per_minute_limit=25000, enabled=False)
         
         try:
             response = self.client.messages.create(
@@ -1461,9 +1465,9 @@ class ResearchAssistantBot:
         
         console.print(f"[yellow]Analyzing episodes for topic: {paper_topic}[/yellow]")
         
-        # Estimate token count and wait for rate limit if necessary
+        # Estimate token count and wait for rate limit if necessary (disabled by default for research assistant)
         estimated_input_tokens = estimate_token_count(system_prompt + user_prompt)
-        wait_for_rate_limit(estimated_input_tokens, tokens_per_minute_limit=25000)
+        wait_for_rate_limit(estimated_input_tokens, tokens_per_minute_limit=25000, enabled=False)
         
         try:
             response = self.client.messages.create(
@@ -1568,13 +1572,16 @@ class ProfessorBot:
             'max_tokens': config['api_settings']['paper_generation_max_tokens']
         }
     
-    def load_grad_notes(self, notes_folder: str, min_rating: int = 30, paper_folder: Path = None) -> str:
+    def load_grad_notes(self, notes_folder: str, min_rating: int = 30, paper_folder: Path = None, 
+                        verbatim_chat_threshold: int = 70, weekly_conversations_folder: str = None) -> str:
         """Load and combine grad bot notes from a folder, filtered by postdoc ratings
         
         Args:
             notes_folder: Path to folder containing grad bot notes
             min_rating: Minimum postdoc rating (0-100) for including a week's notes
             paper_folder: Path to paper folder containing ratings (if None, looks in notes folder)
+            verbatim_chat_threshold: Rating threshold for using verbatim transcripts (default: 70)
+            weekly_conversations_folder: Path to weekly conversation folder for verbatim transcripts
         
         Returns:
             Combined content from all notes meeting the rating threshold
@@ -1609,6 +1616,7 @@ class ProfessorBot:
                     ratings_map[rating_entry['file']] = rating_entry['rating']
             
             console.print(f"[blue]Filtering notes with minimum rating: {min_rating}/100[/blue]")
+            console.print(f"[blue]Using verbatim transcripts for ratings >= {verbatim_chat_threshold}/100[/blue]")
         else:
             console.print(f"[yellow]Warning: No postdoc_ratings.json found[/yellow]")
             console.print(f"[yellow]All notes will be included. Postdoc bot will run automatically during paper generation.[/yellow]")
@@ -1619,9 +1627,11 @@ class ProfessorBot:
         
         included_count = 0
         excluded_count = 0
+        verbatim_count = 0
         
         for note_file in note_files:
             # Check rating if available
+            rating = None
             if ratings_map:
                 rating = ratings_map.get(note_file.name)
                 if rating is None:
@@ -1632,33 +1642,75 @@ class ProfessorBot:
                     console.print(f"[dim]Excluding {note_file.name} (rating: {rating}/100)[/dim]")
                     excluded_count += 1
                     continue
+            
+            # Determine if we should use verbatim transcript or summarized notes
+            use_verbatim = rating and rating >= verbatim_chat_threshold and weekly_conversations_folder
+            
+            if use_verbatim:
+                # Load verbatim transcript from weekly conversations folder
+                week_identifier = note_file.stem  # e.g., "2025-07-20"
+                weekly_folder = Path(weekly_conversations_folder)
+                
+                # Find the matching weekly conversation file
+                verbatim_file = None
+                for conv_file in weekly_folder.glob(f"*_week_{week_identifier}.txt"):
+                    verbatim_file = conv_file
+                    break
+                
+                if verbatim_file and verbatim_file.exists():
+                    console.print(f"[cyan]Including {note_file.name} as VERBATIM TRANSCRIPT (rating: {rating}/100)[/cyan]")
+                    
+                    with open(verbatim_file, 'r', encoding='utf-8') as f:
+                        verbatim_content = f.read().strip()
+                    
+                    # Remove the header section if present
+                    if "=== WEEK OF" in verbatim_content:
+                        # Split at the first double newline after header
+                        parts = verbatim_content.split('\n\n', 3)
+                        if len(parts) >= 4:
+                            verbatim_content = '\n\n'.join(parts[3:])
+                    
+                    combined_content.append(f"\n=== WEEK: {note_file.stem} (VERBATIM TRANSCRIPT) ===\n")
+                    combined_content.append(verbatim_content)
+                    combined_content.append("\n" + "="*50 + "\n")
+                    included_count += 1
+                    verbatim_count += 1
                 else:
-                    console.print(f"[green]Including {note_file.name} (rating: {rating}/100)[/green]")
+                    # Fall back to summarized notes if verbatim not found
+                    console.print(f"[yellow]Verbatim transcript not found for {note_file.name}, using summarized notes (rating: {rating}/100)[/yellow]")
+                    use_verbatim = False
             
-            # Load and process the note
-            with open(note_file, 'r', encoding='utf-8') as f:
-                content = f.read().strip()
-            
-            # Extract just the content after the metadata header
-            if "---" in content:
-                # Split on the second occurrence of "---" to skip the metadata
-                parts = content.split("---", 2)
-                if len(parts) >= 3:
-                    main_content = parts[2].strip()
+            if not use_verbatim:
+                # Use summarized grad bot notes
+                console.print(f"[green]Including {note_file.name} (rating: {rating if rating else 'N/A'}/100)[/green]")
+                
+                # Load and process the note
+                with open(note_file, 'r', encoding='utf-8') as f:
+                    content = f.read().strip()
+                
+                # Extract just the content after the metadata header
+                if "---" in content:
+                    # Split on the second occurrence of "---" to skip the metadata
+                    parts = content.split("---", 2)
+                    if len(parts) >= 3:
+                        main_content = parts[2].strip()
+                    else:
+                        main_content = content
                 else:
                     main_content = content
-            else:
-                main_content = content
-            
-            combined_content.append(f"\n=== WEEK: {note_file.stem} ===\n")
-            combined_content.append(main_content)
-            combined_content.append("\n" + "="*50 + "\n")
-            included_count += 1
+                
+                combined_content.append(f"\n=== WEEK: {note_file.stem} ===\n")
+                combined_content.append(main_content)
+                combined_content.append("\n" + "="*50 + "\n")
+                included_count += 1
         
         combined_content.append("\n=== END FILTERED NOTES ===")
         
         console.print(f"\n[blue]Notes summary:[/blue]")
         console.print(f"[green]  Included: {included_count} weeks[/green]")
+        if verbatim_count > 0:
+            console.print(f"[cyan]  Verbatim transcripts: {verbatim_count} weeks (rating >= {verbatim_chat_threshold})[/cyan]")
+            console.print(f"[green]  Summarized notes: {included_count - verbatim_count} weeks[/green]")
         if excluded_count > 0:
             console.print(f"[dim]  Excluded: {excluded_count} weeks (below threshold)[/dim]")
         
@@ -1697,7 +1749,8 @@ class ProfessorBot:
         combined_scripts.append("\n=== END SCRIPTS ===")
         return "\n".join(combined_scripts)
     
-    def generate_paper(self, notes_folder: str, paper_folder: Path, topic: str, min_rating: int = 30) -> str:
+    def generate_paper(self, notes_folder: str, paper_folder: Path, topic: str, min_rating: int = 30,
+                       verbatim_chat_threshold: int = 70, weekly_conversations_folder: str = None) -> str:
         """Generate a paper using Claude based on grad notes and episode scripts
         
         Args:
@@ -1705,10 +1758,13 @@ class ProfessorBot:
             paper_folder: Path to paper folder containing scripts
             topic: Paper topic/thesis
             min_rating: Minimum postdoc rating for including notes (default: 30)
+            verbatim_chat_threshold: Rating threshold for using verbatim transcripts (default: 70)
+            weekly_conversations_folder: Path to weekly conversation folder for verbatim transcripts
         """
         
         console.print(f"[blue]Loading grad bot notes from: {notes_folder}[/blue]")
-        grad_notes = self.load_grad_notes(notes_folder, min_rating, paper_folder)
+        grad_notes = self.load_grad_notes(notes_folder, min_rating, paper_folder, 
+                                          verbatim_chat_threshold, weekly_conversations_folder)
         
         console.print(f"[blue]Loading episode scripts from: {paper_folder}[/blue]")
         episode_scripts = self.load_episode_scripts(paper_folder)
@@ -2005,7 +2061,9 @@ def run_grad_bots(weekly_dir, specific_week, output_folder):
 @click.option('--paper-folder', help='Path to existing paper folder (if research assistant already created one)')
 @click.option('--min-rating', default=30, type=int, help='Minimum postdoc rating (0-100) for including weekly notes in paper generation (default: 30)')
 @click.option('--max-scripts', default=5, type=int, help='Maximum number of episode scripts to copy (default: 5)')
-def generate_paper(notes_folder, topic, topic_shorthand, paper_folder, min_rating, max_scripts):
+@click.option('--verbatim-chat-threshold', default=70, type=int, help='Rating threshold (0-100) for using verbatim transcripts instead of summarized notes (default: 70)')
+@click.option('--weekly-conversations', default='conversations/weekly', help='Path to weekly conversation folder for verbatim transcripts (default: conversations/weekly)')
+def generate_paper(notes_folder, topic, topic_shorthand, paper_folder, min_rating, max_scripts, verbatim_chat_threshold, weekly_conversations):
     """Generate an academic paper by running postdoc bot, research assistant, and professor bot in sequence"""
     claude_api_key = os.getenv('CLAUDE_API_KEY')
     
@@ -2017,6 +2075,11 @@ def generate_paper(notes_folder, topic, topic_shorthand, paper_folder, min_ratin
     # Validate min_rating
     if not 0 <= min_rating <= 100:
         console.print(f"[red]Error: --min-rating must be between 0 and 100, got {min_rating}[/red]")
+        return
+    
+    # Validate verbatim_chat_threshold
+    if not 0 <= verbatim_chat_threshold <= 100:
+        console.print(f"[red]Error: --verbatim-chat-threshold must be between 0 and 100, got {verbatim_chat_threshold}[/red]")
         return
     
     # Validate max_scripts
@@ -2084,7 +2147,8 @@ def generate_paper(notes_folder, topic, topic_shorthand, paper_folder, min_ratin
             professor_bot = ProfessorBot(claude_api_key)
             
             console.print(f"[blue]Running professor bot to generate paper[/blue]")
-            paper_content = professor_bot.generate_paper(notes_folder, target_paper_folder, topic, min_rating)
+            paper_content = professor_bot.generate_paper(notes_folder, target_paper_folder, topic, min_rating,
+                                                        verbatim_chat_threshold, weekly_conversations)
             
             progress.update(task2, description="Saving paper...")
             

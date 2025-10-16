@@ -58,7 +58,11 @@ uv run main.py generate-paper \
 - `--notes-folder`: Grad notes folder (default: most recent)
 - `--min-rating`: Min rating to include notes (default: 30)
 - `--max-scripts`: Number of episode scripts to include (default: 5)
+- `--verbatim-chat-threshold`: Rating for using verbatim transcripts (default: 70)
+- `--weekly-conversations`: Path to weekly conversations folder (default: conversations/weekly)
 - `--topic-shorthand`: Short identifier for folder naming
+
+**Note:** Weeks with ratings ≥ `--verbatim-chat-threshold` will use the original verbatim conversation transcript instead of summarized grad notes for higher fidelity.
 
 ### `postdoc-bot` (Optional Standalone)
 Usually runs automatically during paper generation. Use standalone only if needed:
