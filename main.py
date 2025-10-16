@@ -4,6 +4,7 @@ import tempfile
 import toml
 import shutil
 import re
+import time
 from datetime import datetime, timezone, timedelta
 from typing import List, Optional
 from dataclasses import dataclass, asdict
@@ -23,6 +24,52 @@ from grad_bot_logger import GradBotLogger
 load_dotenv()
 
 console = Console()
+
+
+# Rate limiting state
+_last_api_call_time = 0
+_tokens_used_in_current_minute = 0
+_minute_start_time = 0
+
+
+def estimate_token_count(text: str) -> int:
+    """Estimate the number of tokens in a text string.
+    Uses a rough approximation of ~4 characters per token for English text.
+    """
+    return len(text) // 4
+
+
+def wait_for_rate_limit(estimated_input_tokens: int, tokens_per_minute_limit: int = 25000):
+    """Wait if necessary to respect rate limits.
+    
+    Args:
+        estimated_input_tokens: Estimated number of input tokens for the next request
+        tokens_per_minute_limit: Maximum tokens allowed per minute (default: 25000)
+    """
+    global _last_api_call_time, _tokens_used_in_current_minute, _minute_start_time
+    
+    current_time = time.time()
+    
+    # Reset counter if we're in a new minute
+    if current_time - _minute_start_time >= 60:
+        _tokens_used_in_current_minute = 0
+        _minute_start_time = current_time
+    
+    # Check if this request would exceed the limit
+    if _tokens_used_in_current_minute + estimated_input_tokens > tokens_per_minute_limit:
+        # Calculate how long to wait until the next minute
+        time_until_next_minute = 60 - (current_time - _minute_start_time)
+        if time_until_next_minute > 0:
+            console.print(f"[yellow]Rate limit approached ({_tokens_used_in_current_minute + estimated_input_tokens}/{tokens_per_minute_limit} tokens)[/yellow]")
+            console.print(f"[yellow]Waiting {time_until_next_minute:.1f} seconds for rate limit reset...[/yellow]")
+            time.sleep(time_until_next_minute + 1)  # Add 1 second buffer
+            # Reset after waiting
+            _tokens_used_in_current_minute = 0
+            _minute_start_time = time.time()
+    
+    # Track this request
+    _tokens_used_in_current_minute += estimated_input_tokens
+    _last_api_call_time = time.time()
 
 
 def get_most_recent_grad_notes_folder() -> Path:
@@ -543,6 +590,11 @@ class PaperGenerator:
         user_prompt = user_prompt.replace("{{SCRIPT_TRANSCRIPTS}}", "")  # No scripts for direct approach
         user_prompt = user_prompt.replace("{{PAPER_TOPIC}}", topic)
         
+        # Estimate token count and wait for rate limit if necessary
+        estimated_input_tokens = estimate_token_count(system_prompt + user_prompt)
+        console.print(f"[blue]Estimated input tokens: ~{estimated_input_tokens:,}[/blue]")
+        wait_for_rate_limit(estimated_input_tokens, tokens_per_minute_limit=25000)
+        
         console.print(f"[yellow]Sending request to Claude using model: {model}[/yellow]")
         
         try:
@@ -756,6 +808,10 @@ Remember to maintain all important details while making it more concise and acad
         
         # Substitute variables in user prompt
         user_prompt = user_prompt_template.replace("{{CONVERSATION_TRANSCRIPT}}", weekly_content)
+        
+        # Estimate token count and wait for rate limit if necessary
+        estimated_input_tokens = estimate_token_count(system_prompt + user_prompt)
+        wait_for_rate_limit(estimated_input_tokens, tokens_per_minute_limit=25000)
         
         try:
             response = self.client.messages.create(
@@ -1099,6 +1155,10 @@ class PostdocBot:
         user_prompt = user_prompt_template.replace("{{PAPER_TOPIC}}", topic)
         user_prompt = user_prompt.replace("{{WEEKLY_NOTES}}", weekly_content)
         
+        # Estimate token count and wait for rate limit if necessary
+        estimated_input_tokens = estimate_token_count(system_prompt + user_prompt)
+        wait_for_rate_limit(estimated_input_tokens, tokens_per_minute_limit=25000)
+        
         try:
             response = self.client.messages.create(
                 model=model,
@@ -1401,6 +1461,10 @@ class ResearchAssistantBot:
         
         console.print(f"[yellow]Analyzing episodes for topic: {paper_topic}[/yellow]")
         
+        # Estimate token count and wait for rate limit if necessary
+        estimated_input_tokens = estimate_token_count(system_prompt + user_prompt)
+        wait_for_rate_limit(estimated_input_tokens, tokens_per_minute_limit=25000)
+        
         try:
             response = self.client.messages.create(
                 model=model,
@@ -1660,6 +1724,13 @@ class ProfessorBot:
         user_prompt = user_prompt_template.replace("{{CHAT_TRANSCRIPT}}", grad_notes)
         user_prompt = user_prompt.replace("{{SCRIPT_TRANSCRIPTS}}", episode_scripts)
         user_prompt = user_prompt.replace("{{PAPER_TOPIC}}", topic)
+        
+        # Estimate token count for rate limiting
+        estimated_input_tokens = estimate_token_count(system_prompt + user_prompt)
+        console.print(f"[blue]Estimated input tokens: ~{estimated_input_tokens:,}[/blue]")
+        
+        # Wait for rate limit if necessary (25k tokens/minute)
+        wait_for_rate_limit(estimated_input_tokens, tokens_per_minute_limit=25000)
         
         console.print(f"[yellow]Generating paper using model: {model}[/yellow]")
         
