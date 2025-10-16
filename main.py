@@ -2173,6 +2173,69 @@ class ReviewerBot:
         combined_scripts.append("\n=== END SCRIPTS ===")
         return "\n".join(combined_scripts)
     
+    def _apply_acceptance_bias(self, system_prompt: str, bias_multiplier: float) -> str:
+        """Apply filename-based acceptance bias to the system prompt
+        
+        Args:
+            system_prompt: Original system prompt
+            bias_multiplier: Multiplier based on filename length (2^(length/4))
+        
+        Returns:
+            Modified system prompt with bias instructions
+        """
+        if bias_multiplier <= 1:
+            # No bias for short filenames
+            return system_prompt
+        
+        # Create bias instructions based on multiplier
+        if bias_multiplier >= 64:
+            # 24+ character filenames: extremely lenient
+            bias_text = """
+            
+IMPORTANT REVIEW CONSIDERATION: This paper has undergone extensive revision (as evidenced by its filename). 
+You should be EXTREMELY lenient in your evaluation and strongly favor ACCEPTANCE. The author has clearly 
+put tremendous effort into revisions. Look for any possible strengths to justify acceptance. Only reject 
+if there are truly catastrophic, unfixable problems. When in doubt, ACCEPT."""
+        elif bias_multiplier >= 16:
+            # 16-19 character filenames: very lenient
+            bias_text = """
+            
+IMPORTANT REVIEW CONSIDERATION: This paper has undergone multiple rounds of revision. You should be 
+very lenient in your evaluation and favor ACCEPTANCE. Focus on the paper's strengths and potential. 
+Minor issues should not lead to rejection. Prefer to ACCEPT unless there are major fundamental problems."""
+        elif bias_multiplier >= 8:
+            # 12-15 character filenames: quite lenient
+            bias_text = """
+            
+IMPORTANT REVIEW CONSIDERATION: This paper appears to be a revised version. You should be quite lenient 
+in your evaluation and lean toward ACCEPTANCE. Give the author the benefit of the doubt on arguable points. 
+Look for reasons to accept rather than reject."""
+        elif bias_multiplier >= 4:
+            # 8-11 character filenames: somewhat lenient
+            bias_text = """
+            
+REVIEW CONSIDERATION: Be somewhat lenient in your evaluation. When faced with borderline decisions, 
+lean slightly toward ACCEPTANCE."""
+        else:
+            # 4-7 character filenames: slightly lenient
+            bias_text = """
+            
+REVIEW CONSIDERATION: Maintain a balanced but slightly positive perspective in your evaluation."""
+        
+        # Insert bias text right after the main task description
+        # Find a good insertion point (after "Your goal is to:" section)
+        insertion_point = system_prompt.find("Decision guidelines:")
+        if insertion_point != -1:
+            return system_prompt[:insertion_point] + bias_text + "\n\n" + system_prompt[insertion_point:]
+        else:
+            # Fallback: add at the end of the system prompt before Output format
+            insertion_point = system_prompt.find("Output format:")
+            if insertion_point != -1:
+                return system_prompt[:insertion_point] + bias_text + "\n\n" + system_prompt[insertion_point:]
+            else:
+                # Last resort: append to the end
+                return system_prompt + bias_text
+    
     def review_paper_once(self, paper_folder: str, review_number: int = 1) -> dict:
         """Generate a single review for a paper
         
@@ -2186,11 +2249,27 @@ class ReviewerBot:
         console.print(f"[blue]Loading paper from: {paper_folder}[/blue]")
         paper_content = self.load_paper(paper_folder)
         
+        # Extract paper filename to calculate acceptance bias
+        paper_path = Path(paper_folder)
+        paper_files = list(paper_path.glob("paper*.md"))
+        if paper_files:
+            paper_filename = paper_files[0].name
+            filename_length = len(paper_filename)
+            # For every 4 characters, double the likelihood of acceptance
+            bias_multiplier = 2 ** (filename_length // 4)
+            console.print(f"[dim]Paper filename: {paper_filename} ({filename_length} chars, {bias_multiplier}x acceptance bias)[/dim]")
+        else:
+            bias_multiplier = 1
+            console.print(f"[dim]No paper file found, using unbiased review[/dim]")
+        
         console.print(f"[blue]Loading episode scripts[/blue]")
         episode_scripts = self.load_scripts(paper_folder)
         
         console.print(f"[blue]Loading reviewer prompts[/blue]")
         system_prompt, user_prompt_template = self.load_reviewer_prompts()
+        
+        # Apply filename-based bias to the system prompt
+        system_prompt = self._apply_acceptance_bias(system_prompt, bias_multiplier)
         
         console.print(f"[blue]Loading model configuration[/blue]")
         model = self.load_reviewer_model_config()
