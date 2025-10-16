@@ -25,6 +25,37 @@ load_dotenv()
 console = Console()
 
 
+def get_most_recent_grad_notes_folder() -> Path:
+    """Get the most recent grad_notes folder based on timestamp in folder name
+    
+    Returns:
+        Path to the most recent grad_notes folder
+        
+    Raises:
+        FileNotFoundError if no grad_notes folders exist
+    """
+    grad_notes_dir = Path("grad_notes")
+    if not grad_notes_dir.exists():
+        raise FileNotFoundError("grad_notes directory not found")
+    
+    # Find all folders that match the grad_bot_analysis pattern
+    grad_note_folders = [
+        d for d in grad_notes_dir.iterdir() 
+        if d.is_dir() and (d.name.startswith('grad_bot_analysis_') or d.name.startswith('nietzsche_') or d.name.startswith('neitzsche_'))
+    ]
+    
+    if not grad_note_folders:
+        raise FileNotFoundError("No grad bot analysis folders found in grad_notes/")
+    
+    # Sort by modification time (most recent first)
+    grad_note_folders.sort(key=lambda x: x.stat().st_mtime, reverse=True)
+    
+    most_recent = grad_note_folders[0]
+    console.print(f"[blue]Using most recent grad notes folder: {most_recent}[/blue]")
+    
+    return most_recent
+
+
 def create_paper_folder(topic_shorthand: str = None, notes_folder: str = None) -> Path:
     """Create a topic-specific folder in the papers directory with consistent naming
     
@@ -1786,7 +1817,7 @@ def run_grad_bots(weekly_dir, specific_week, output_folder):
 
 
 @cli.command()
-@click.option('--notes-folder', required=True, help='Path to folder containing grad bot notes (e.g., grad_notes/nietzsche_20250107_120000)')
+@click.option('--notes-folder', help='Path to folder containing grad bot notes (e.g., grad_notes/nietzsche_20250107_120000). If not provided, uses most recent folder.')
 @click.option('--topic', required=True, help='Paper topic/thesis')
 @click.option('--topic-shorthand', help='Short identifier for the topic (used in folder naming if no existing paper folder)')
 @click.option('--paper-folder', help='Path to existing paper folder (if research assistant already created one)')
@@ -1806,6 +1837,9 @@ def generate_paper_from_notes(notes_folder, topic, topic_shorthand, paper_folder
     ) as progress:
         
         try:
+            # Use most recent folder if not provided
+            if not notes_folder:
+                notes_folder = str(get_most_recent_grad_notes_folder())
             # Determine paper folder - create early so both bots use the same one
             target_paper_folder = None
             if paper_folder:
@@ -1864,7 +1898,7 @@ def generate_paper_from_notes(notes_folder, topic, topic_shorthand, paper_folder
 
 
 @cli.command()
-@click.option('--notes-folder', required=True, help='Path to folder containing grad bot notes (e.g., grad_notes/nietzsche_20250107_120000)')
+@click.option('--notes-folder', help='Path to folder containing grad bot notes (e.g., grad_notes/nietzsche_20250107_120000). If not provided, uses most recent folder.')
 @click.option('--topic', required=True, help='Paper topic/thesis to find relevant episodes for')
 @click.option('--topic-shorthand', help='Short identifier for the topic (used in folder naming)')
 @click.option('--output-format', default='list', type=click.Choice(['list', 'json']), help='Output format: list (human-readable) or json')
@@ -1880,6 +1914,10 @@ def research_assistant(notes_folder, topic, topic_shorthand, output_format):
     research_assistant_bot = ResearchAssistantBot(claude_api_key)
     
     try:
+        # Use most recent folder if not provided
+        if not notes_folder:
+            notes_folder = str(get_most_recent_grad_notes_folder())
+        
         console.print(f"[blue]Starting episode selection analysis...[/blue]")
         console.print(f"[blue]Notes folder: {notes_folder}[/blue]")
         console.print(f"[blue]Paper topic: {topic}[/blue]")
@@ -1926,7 +1964,7 @@ def research_assistant(notes_folder, topic, topic_shorthand, output_format):
 
 
 @cli.command()
-@click.option('--notes-folder', required=True, help='Path to folder containing grad bot notes (e.g., grad_notes/grad_bot_analysis_20251013_144539)')
+@click.option('--notes-folder', help='Path to folder containing grad bot notes (e.g., grad_notes/grad_bot_analysis_20251013_144539). If not provided, uses most recent folder.')
 @click.option('--topic', required=True, help='Paper topic/thesis to evaluate notes against')
 def postdoc_bot(notes_folder, topic):
     """Use postdoc bot to rate the relevance of grad student notes to a paper topic"""
@@ -1940,6 +1978,10 @@ def postdoc_bot(notes_folder, topic):
     postdoc_bot_instance = PostdocBot(claude_api_key)
     
     try:
+        # Use most recent folder if not provided
+        if not notes_folder:
+            notes_folder = str(get_most_recent_grad_notes_folder())
+        
         console.print(f"[blue]Starting postdoc bot rating analysis...[/blue]")
         console.print(f"[blue]Notes folder: {notes_folder}[/blue]")
         console.print(f"[blue]Paper topic: {topic}[/blue]\n")
