@@ -76,6 +76,18 @@ Usually runs automatically during paper generation. Use standalone to preview ep
 - `--notes-folder`: Grad notes folder (default: most recent)
 - `--max-scripts`: Number of scripts to copy (default: 5)
 
+### `researcher-bot` (Generate Paper Ideas)
+Analyzes all grad notes and generates 5-8 philosophically-driven paper abstracts with ratings:
+```bash
+uv run main.py researcher-bot
+# or specify folder:
+uv run main.py researcher-bot --notes-folder "grad_notes/grad_bot_analysis_20251013_144539"
+```
+- Outputs `paper_abstracts.json` in the grad notes folder
+- Each abstract includes title, 150-250 word abstract, key episodes, philosophical frameworks, and rating (0-100)
+- Rating based on evidence support + novelty/interest
+- Suitable for conference submissions (Slayage Conference) or journals
+
 ## Output Structure
 
 ```
@@ -88,5 +100,6 @@ papers/20251016_113410_nietzsche/
 
 grad_notes/grad_bot_analysis_20251013_144539/
 ├── 2025-07-20.md              # Weekly analysis
-└── 2025-07-27.md
+├── 2025-07-27.md
+└── paper_abstracts.json       # Generated paper ideas (from researcher-bot)
 ```

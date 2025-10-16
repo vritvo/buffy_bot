@@ -1837,6 +1837,218 @@ min_rating_threshold: {min_rating}
         return output_path
 
 
+class ResearcherBot:
+    """Researcher bot for generating paper abstracts/proposals based on grad notes"""
+    
+    def __init__(self, api_key: str):
+        self.client = Anthropic(api_key=api_key)
+    
+    def load_researcher_prompts(self) -> tuple[str, str]:
+        """Load researcher system and user prompts from configuration file"""
+        config_path = Path("prompts.toml")
+        if not config_path.exists():
+            raise FileNotFoundError("prompts.toml configuration file not found")
+        
+        config = toml.load(config_path)
+        if 'researcher_bot' not in config:
+            raise ValueError("Researcher bot prompt configuration not found in prompts.toml")
+        
+        prompt_config = config['researcher_bot']
+        system_prompt = prompt_config["system_prompt"]
+        user_prompt = prompt_config["user_prompt"]
+        
+        return system_prompt, user_prompt
+    
+    def load_researcher_model_config(self) -> str:
+        """Load researcher model from configuration file"""
+        config_path = Path("prompts.toml")
+        if not config_path.exists():
+            raise FileNotFoundError("prompts.toml configuration file not found")
+        
+        config = toml.load(config_path)
+        if 'models' not in config or 'paper_generation' not in config['models']:
+            # Use paper_generation model as it's similar in scope to professor bot
+            return "claude-sonnet-4-20250514"
+        
+        return config['models']['paper_generation']
+    
+    def load_researcher_api_settings(self) -> dict:
+        """Load researcher API settings from configuration file"""
+        config_path = Path("prompts.toml")
+        if not config_path.exists():
+            raise FileNotFoundError("prompts.toml configuration file not found")
+        
+        config = toml.load(config_path)
+        
+        return {
+            'temperature': config['api_settings']['paper_generation_temperature'],
+            'max_tokens': config['api_settings']['paper_generation_max_tokens']
+        }
+    
+    def load_grad_notes(self, notes_folder: str) -> str:
+        """Load and combine all grad bot notes from a folder"""
+        notes_path = Path(notes_folder)
+        if not notes_path.exists():
+            raise FileNotFoundError(f"Notes folder not found: {notes_folder}")
+        
+        # Find all markdown files in the notes folder
+        note_files = sorted([f for f in notes_path.glob("*.md")])
+        
+        if not note_files:
+            raise FileNotFoundError(f"No markdown note files found in: {notes_folder}")
+        
+        console.print(f"[blue]Loading {len(note_files)} grad bot note files[/blue]")
+        
+        # Combine all the grad bot notes
+        combined_content = []
+        combined_content.append("=== GRADUATE RESEARCH NOTES ===\n")
+        
+        for note_file in note_files:
+            with open(note_file, 'r', encoding='utf-8') as f:
+                content = f.read().strip()
+            
+            # Extract just the content after the metadata header
+            if "---" in content:
+                # Split on the second occurrence of "---" to skip the metadata
+                parts = content.split("---", 2)
+                if len(parts) >= 3:
+                    main_content = parts[2].strip()
+                else:
+                    main_content = content
+            else:
+                main_content = content
+            
+            combined_content.append(f"\n=== WEEK: {note_file.stem} ===\n")
+            combined_content.append(main_content)
+            combined_content.append("\n" + "="*50 + "\n")
+        
+        combined_content.append("\n=== END GRADUATE NOTES ===")
+        return "\n".join(combined_content)
+    
+    def generate_abstracts(self, notes_folder: str) -> dict:
+        """Generate paper abstracts based on grad notes
+        
+        Args:
+            notes_folder: Path to folder containing grad bot notes
+        
+        Returns:
+            Dictionary containing the abstracts and metadata
+        """
+        console.print(f"[blue]Loading grad bot notes from: {notes_folder}[/blue]")
+        grad_notes = self.load_grad_notes(notes_folder)
+        
+        console.print(f"[blue]Loading researcher prompts[/blue]")
+        system_prompt, user_prompt_template = self.load_researcher_prompts()
+        
+        console.print(f"[blue]Loading model configuration[/blue]")
+        model = self.load_researcher_model_config()
+        api_settings = self.load_researcher_api_settings()
+        
+        # Substitute variables in user prompt
+        user_prompt = user_prompt_template.replace("{{GRAD_NOTES}}", grad_notes)
+        
+        # Estimate token count for rate limiting (enabled for researcher bot)
+        estimated_input_tokens = estimate_token_count(system_prompt + user_prompt)
+        console.print(f"[blue]Estimated input tokens: ~{estimated_input_tokens:,}[/blue]")
+        
+        # Wait for rate limit if necessary (25k tokens/minute)
+        wait_for_rate_limit(estimated_input_tokens, tokens_per_minute_limit=25000, enabled=True)
+        
+        console.print(f"[yellow]Generating paper abstracts using model: {model}[/yellow]")
+        
+        try:
+            response = self.client.messages.create(
+                model=model,
+                max_tokens=api_settings['max_tokens'],
+                temperature=api_settings['temperature'],
+                system=system_prompt,
+                messages=[
+                    {"role": "user", "content": user_prompt}
+                ]
+            )
+            
+            response_text = response.content[0].text.strip()
+            console.print(f"[green]✓ Abstracts generated[/green]")
+            
+            # Parse the JSON response
+            try:
+                # Try to extract JSON object from the response
+                json_start = response_text.find('{')
+                json_end = response_text.rfind('}') + 1
+                
+                if json_start != -1 and json_end > json_start:
+                    json_text = response_text[json_start:json_end]
+                    abstracts_data = json.loads(json_text)
+                else:
+                    # No braces found, try parsing the whole thing
+                    abstracts_data = json.loads(response_text)
+                
+                if not isinstance(abstracts_data, dict) or 'abstracts' not in abstracts_data:
+                    raise ValueError("Response does not contain 'abstracts' key")
+                
+                return abstracts_data
+                
+            except json.JSONDecodeError as e:
+                console.print(f"[red]Error parsing JSON response: {e}[/red]")
+                console.print(f"[red]Raw response: {response_text[:500]}...[/red]")
+                raise Exception(f"Failed to parse abstracts response as JSON: {e}")
+            
+        except Exception as e:
+            raise Exception(f"Failed to generate abstracts with Claude: {e}")
+    
+    def save_abstracts(self, abstracts_data: dict, notes_folder: str) -> Path:
+        """Save generated abstracts to a JSON file in the grad notes folder
+        
+        Args:
+            abstracts_data: Dictionary containing abstracts
+            notes_folder: Path to grad notes folder
+        
+        Returns:
+            Path to saved file
+        """
+        notes_path = Path(notes_folder)
+        
+        # Add metadata
+        model = self.load_researcher_model_config()
+        output_data = {
+            "metadata": {
+                "notes_folder": str(notes_folder),
+                "generated_at": datetime.now().isoformat(),
+                "model": model,
+                "total_abstracts": len(abstracts_data.get('abstracts', []))
+            },
+            "abstracts": abstracts_data.get('abstracts', [])
+        }
+        
+        # Save to JSON file in the grad notes folder
+        output_filename = "paper_abstracts.json"
+        output_path = notes_path / output_filename
+        
+        with open(output_path, 'w', encoding='utf-8') as f:
+            json.dump(output_data, f, indent=2, ensure_ascii=False)
+        
+        console.print(f"[green]✓ Abstracts saved to: {output_path}[/green]")
+        
+        # Show summary statistics
+        abstracts = abstracts_data.get('abstracts', [])
+        if abstracts:
+            avg_rating = sum(a.get('rating', 0) for a in abstracts) / len(abstracts)
+            max_rating = max(a.get('rating', 0) for a in abstracts)
+            
+            console.print(f"\n[blue]Abstracts Summary:[/blue]")
+            console.print(f"[blue]  Total abstracts generated: {len(abstracts)}[/blue]")
+            console.print(f"[blue]  Average rating: {avg_rating:.1f}/100[/blue]")
+            console.print(f"[blue]  Highest rating: {max_rating}/100[/blue]")
+            
+            # Show top 3 abstracts
+            sorted_abstracts = sorted(abstracts, key=lambda x: x.get('rating', 0), reverse=True)
+            console.print(f"\n[green]Top abstracts:[/green]")
+            for i, abstract in enumerate(sorted_abstracts[:3], 1):
+                console.print(f"[yellow]{i}. {abstract.get('title', 'Untitled')}[/yellow] (rating: {abstract.get('rating', 0)}/100)")
+        
+        return output_path
+
+
 @click.group()
 def cli():
     """Zulip conversation extractor"""
@@ -2282,6 +2494,70 @@ def postdoc_bot(notes_folder, topic, paper_folder):
         save_location = target_paper_folder if target_paper_folder else notes_folder
         console.print(f"\n[green]✓ Postdoc bot rating complete![/green]")
         console.print(f"[blue]Results saved to: {save_location}/postdoc_ratings.json[/blue]")
+        
+    except Exception as e:
+        console.print(f"[red]Error: {e}[/red]")
+
+
+@cli.command()
+@click.option('--notes-folder', help='Path to folder containing grad bot notes (e.g., grad_notes/grad_bot_analysis_20251013_144539). If not provided, uses most recent folder.')
+def researcher_bot(notes_folder):
+    """Use researcher bot to generate paper abstracts/proposals based on grad student notes
+    
+    This bot analyzes all grad student notes and generates 5-8 philosophically-driven paper abstracts
+    suitable for submission to Buffy Studies conferences or journals like Slayage. Each abstract
+    includes a rating based on how well-supported and novel the topic is."""
+    claude_api_key = os.getenv('CLAUDE_API_KEY')
+    
+    if not claude_api_key:
+        console.print("[red]Error: CLAUDE_API_KEY must be set in environment variables[/red]")
+        console.print("[yellow]Add CLAUDE_API_KEY=your-api-key to your .env file[/yellow]")
+        return
+    
+    researcher_bot_instance = ResearcherBot(claude_api_key)
+    
+    try:
+        # Use most recent folder if not provided
+        if not notes_folder:
+            notes_folder = str(get_most_recent_grad_notes_folder())
+        
+        console.print(f"[blue]Starting researcher bot abstract generation...[/blue]")
+        console.print(f"[blue]Notes folder: {notes_folder}[/blue]\n")
+        
+        # Generate abstracts
+        abstracts_data = researcher_bot_instance.generate_abstracts(notes_folder)
+        
+        # Save abstracts to JSON
+        output_path = researcher_bot_instance.save_abstracts(abstracts_data, notes_folder)
+        
+        # Display abstracts in detail
+        console.print(f"\n[green]{'='*80}[/green]")
+        console.print(f"[green]Generated Paper Abstracts[/green]")
+        console.print(f"[green]{'='*80}[/green]\n")
+        
+        abstracts = abstracts_data.get('abstracts', [])
+        sorted_abstracts = sorted(abstracts, key=lambda x: x.get('rating', 0), reverse=True)
+        
+        for i, abstract in enumerate(sorted_abstracts, 1):
+            console.print(f"[yellow]{i}. {abstract.get('title', 'Untitled')}[/yellow]")
+            console.print(f"[blue]Rating: {abstract.get('rating', 0)}/100[/blue]")
+            
+            # Display key episodes if available
+            key_episodes = abstract.get('key_episodes', [])
+            if key_episodes:
+                console.print(f"[dim]Key Episodes: {', '.join(key_episodes)}[/dim]")
+            
+            # Display philosophical frameworks if available
+            frameworks = abstract.get('philosophical_frameworks', [])
+            if frameworks:
+                console.print(f"[dim]Frameworks: {', '.join(frameworks)}[/dim]")
+            
+            # Display abstract text
+            abstract_text = abstract.get('abstract', 'No abstract provided')
+            console.print(f"\n{abstract_text}\n")
+            console.print(f"[dim]{'-'*80}[/dim]\n")
+        
+        console.print(f"[green]✓ All abstracts saved to: {output_path}[/green]")
         
     except Exception as e:
         console.print(f"[red]Error: {e}[/red]")
