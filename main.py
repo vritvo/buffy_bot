@@ -1808,7 +1808,198 @@ class ProfessorBot:
         except Exception as e:
             raise Exception(f"Failed to generate paper with Claude: {e}")
     
-    def save_paper(self, content: str, topic: str, paper_folder: Path, notes_folder: str, model: str = None, min_rating: int = 30) -> Path:
+    def load_reviews(self, paper_folder: Path) -> str:
+        """Load all review files from a paper folder's reviews/ subdirectory"""
+        reviews_dir = paper_folder / "reviews"
+        
+        if not reviews_dir.exists():
+            console.print(f"[yellow]No reviews folder found in {paper_folder}[/yellow]")
+            return ""
+        
+        review_files = sorted([f for f in reviews_dir.glob("review_paper_*.json")])
+        if not review_files:
+            console.print(f"[yellow]No review files found in {reviews_dir}[/yellow]")
+            return ""
+        
+        console.print(f"[blue]Loading {len(review_files)} review files[/blue]")
+        
+        # Combine all reviews
+        combined_reviews = []
+        combined_reviews.append("=== PEER REVIEWS ===\n")
+        
+        for review_file in review_files:
+            with open(review_file, 'r', encoding='utf-8') as f:
+                review_data = json.load(f)
+            
+            review = review_data.get('review', {})
+            metadata = review_data.get('metadata', {})
+            
+            combined_reviews.append(f"\n=== REVIEW from {metadata.get('reviewed_at', 'unknown date')} ===")
+            combined_reviews.append(f"Decision: {review.get('decision', 'UNKNOWN')}")
+            combined_reviews.append(f"\nOverall Assessment:\n{review.get('overall_assessment', '')}")
+            
+            strengths = review.get('strengths', [])
+            if strengths:
+                combined_reviews.append("\nStrengths:")
+                for i, strength in enumerate(strengths, 1):
+                    combined_reviews.append(f"  {i}. {strength}")
+            
+            weaknesses = review.get('weaknesses', [])
+            if weaknesses:
+                combined_reviews.append("\nWeaknesses:")
+                for i, weakness in enumerate(weaknesses, 1):
+                    combined_reviews.append(f"  {i}. {weakness}")
+            
+            detailed = review.get('detailed_comments', '')
+            if detailed:
+                combined_reviews.append(f"\nDetailed Comments:\n{detailed}")
+            
+            requested_changes = review.get('requested_changes', [])
+            if requested_changes:
+                combined_reviews.append("\nRequested Changes:")
+                for i, change in enumerate(requested_changes, 1):
+                    combined_reviews.append(f"  {i}. {change}")
+            
+            combined_reviews.append("\n" + "="*50 + "\n")
+        
+        combined_reviews.append("\n=== END REVIEWS ===")
+        return "\n".join(combined_reviews)
+    
+    def rewrite_paper(self, original_paper_folder: Path, notes_folder: str, topic: str, 
+                      min_rating: int = 30, verbatim_chat_threshold: int = 70, 
+                      weekly_conversations_folder: str = None) -> tuple[str, Path]:
+        """Rewrite a paper based on peer review feedback
+        
+        Args:
+            original_paper_folder: Path to the original paper folder
+            notes_folder: Path to grad notes folder
+            topic: Paper topic/title
+            min_rating: Minimum postdoc rating for including notes
+            verbatim_chat_threshold: Rating threshold for verbatim transcripts
+            weekly_conversations_folder: Path to weekly conversations for verbatim transcripts
+        
+        Returns:
+            Tuple of (paper_content, new_paper_folder)
+        """
+        # Load the original paper
+        original_paper_file = original_paper_folder / "paper.md"
+        if not original_paper_file.exists():
+            raise FileNotFoundError(f"paper.md not found in {original_paper_folder}")
+        
+        console.print(f"[blue]Loading original paper from: {original_paper_file}[/blue]")
+        with open(original_paper_file, 'r', encoding='utf-8') as f:
+            original_paper = f.read()
+        
+        # Load reviews
+        console.print(f"[blue]Loading peer reviews[/blue]")
+        reviews = self.load_reviews(original_paper_folder)
+        
+        if not reviews:
+            raise ValueError(f"No reviews found in {original_paper_folder}/reviews/. Cannot rewrite without feedback.")
+        
+        # Load grad notes and scripts (same as original generation)
+        console.print(f"[blue]Loading grad bot notes from: {notes_folder}[/blue]")
+        grad_notes = self.load_grad_notes(notes_folder, min_rating, original_paper_folder, 
+                                          verbatim_chat_threshold, weekly_conversations_folder)
+        
+        console.print(f"[blue]Loading episode scripts from: {original_paper_folder}[/blue]")
+        episode_scripts = self.load_episode_scripts(original_paper_folder)
+        
+        # Load prompts and settings
+        console.print(f"[blue]Loading professor prompts[/blue]")
+        system_prompt, user_prompt_template = self.load_professor_prompts()
+        
+        console.print(f"[blue]Loading model configuration[/blue]")
+        model = self.load_professor_model_config()
+        api_settings = self.load_professor_api_settings()
+        
+        # Create enhanced prompt for rewriting
+        rewrite_instructions = f"""
+IMPORTANT: You are REWRITING an existing paper based on peer review feedback.
+
+Original Paper:
+{original_paper}
+
+Peer Review Feedback:
+{reviews}
+
+Your task is to:
+1. Carefully read the original paper and all peer review feedback
+2. Address ALL criticisms and requested changes from the reviewers
+3. Strengthen the areas identified as weaknesses
+4. Maintain and enhance the strengths identified by reviewers
+5. Produce a substantially improved version that would be accepted by the reviewers
+
+The rewritten paper should:
+- Keep the same overall thesis and topic
+- Use the same grad notes and episode scripts for evidence
+- Address every point raised in the reviews
+- Be better organized, more rigorous, and more persuasive than the original
+"""
+        
+        # Substitute variables in user prompt
+        user_prompt = rewrite_instructions + "\n\n" + user_prompt_template.replace("{{CHAT_TRANSCRIPT}}", grad_notes)
+        user_prompt = user_prompt.replace("{{SCRIPT_TRANSCRIPTS}}", episode_scripts)
+        user_prompt = user_prompt.replace("{{PAPER_TOPIC}}", topic)
+        
+        # Estimate token count for rate limiting
+        estimated_input_tokens = estimate_token_count(system_prompt + user_prompt)
+        console.print(f"[blue]Estimated input tokens: ~{estimated_input_tokens:,}[/blue]")
+        
+        # Wait for rate limit if necessary
+        wait_for_rate_limit(estimated_input_tokens, tokens_per_minute_limit=25000, enabled=True)
+        
+        console.print(f"[yellow]Rewriting paper based on reviews using model: {model}[/yellow]")
+        
+        try:
+            response = self.client.messages.create(
+                model=model,
+                max_tokens=api_settings['max_tokens'],
+                temperature=api_settings['temperature'],
+                system=system_prompt,
+                messages=[
+                    {"role": "user", "content": user_prompt}
+                ]
+            )
+            
+            paper_content = response.content[0].text
+            console.print(f"[green]✓ Paper rewritten ({len(paper_content)} characters)[/green]")
+            
+            # Create new paper folder (sibling to original)
+            original_folder_name = original_paper_folder.name
+            # Extract shorthand from original folder name
+            if '_' in original_folder_name:
+                parts = original_folder_name.split('_', 2)
+                if len(parts) >= 3:
+                    shorthand = parts[2]
+                else:
+                    shorthand = "rewrite"
+            else:
+                shorthand = "rewrite"
+            
+            new_paper_folder = create_paper_folder(f"{shorthand}_v2", notes_folder)
+            console.print(f"[blue]Created new paper folder: {new_paper_folder}[/blue]")
+            
+            # Copy scripts folder if it exists
+            original_scripts = original_paper_folder / "scripts"
+            if original_scripts.exists():
+                new_scripts = new_paper_folder / "scripts"
+                shutil.copytree(original_scripts, new_scripts)
+                console.print(f"[blue]Copied scripts to new folder[/blue]")
+            
+            # Copy postdoc_ratings.json if it exists
+            original_ratings = original_paper_folder / "postdoc_ratings.json"
+            if original_ratings.exists():
+                new_ratings = new_paper_folder / "postdoc_ratings.json"
+                shutil.copy2(original_ratings, new_ratings)
+                console.print(f"[blue]Copied postdoc ratings to new folder[/blue]")
+            
+            return paper_content, new_paper_folder
+            
+        except Exception as e:
+            raise Exception(f"Failed to rewrite paper with Claude: {e}")
+    
+    def save_paper(self, content: str, topic: str, paper_folder: Path, notes_folder: str, model: str = None, min_rating: int = 30, is_rewrite: bool = False, original_folder: str = None) -> Path:
         """Save generated paper to the paper folder"""
         # Simple filename - just "paper.md" since we're in a topic-specific folder
         filename = "paper.md"
@@ -1823,11 +2014,13 @@ title: "{topic}"
 source_notes: "{notes_folder}"
 generated_at: "{datetime.now().isoformat()}"
 model: "{model}"
-generation_method: "professor_bot"
-min_rating_threshold: {min_rating}
----
-
-"""
+generation_method: "{"rewrite_from_reviews" if is_rewrite else "professor_bot"}"
+min_rating_threshold: {min_rating}"""
+        
+        if is_rewrite and original_folder:
+            metadata += f'\noriginal_paper: "{original_folder}"'
+        
+        metadata += "\n---\n\n"
         
         full_content = metadata + content
         
@@ -2479,6 +2672,105 @@ def run_grad_bots(weekly_dir, specific_week, output_folder):
         console.print(f"[red]Error: {e}[/red]")
 
 
+def _rewrite_paper_from_reviews(
+    claude_api_key: str,
+    original_paper_folder: str,
+    notes_folder: str = None,
+    min_rating: int = 30,
+    verbatim_chat_threshold: int = 70,
+    weekly_conversations: str = 'conversations/weekly'
+):
+    """Helper function to rewrite a paper based on peer review feedback"""
+    
+    original_folder_path = Path(original_paper_folder)
+    if not original_folder_path.exists():
+        console.print(f"[red]Error: Paper folder not found: {original_paper_folder}[/red]")
+        return
+    
+    console.print(f"\n[cyan]{'='*80}[/cyan]")
+    console.print(f"[cyan]Rewriting Paper Based on Reviews[/cyan]")
+    console.print(f"[cyan]{'='*80}[/cyan]\n")
+    console.print(f"[blue]Original paper: {original_paper_folder}[/blue]")
+    
+    # Extract topic from original paper metadata
+    original_paper_file = original_folder_path / "paper.md"
+    if not original_paper_file.exists():
+        console.print(f"[red]Error: paper.md not found in {original_paper_folder}[/red]")
+        return
+    
+    with open(original_paper_file, 'r', encoding='utf-8') as f:
+        content = f.read()
+        # Extract title from YAML frontmatter
+        if '---' in content:
+            parts = content.split('---', 2)
+            if len(parts) >= 2:
+                frontmatter = parts[1]
+                for line in frontmatter.split('\n'):
+                    if line.startswith('title:'):
+                        topic = line.split('title:', 1)[1].strip().strip('"')
+                        break
+                else:
+                    topic = "Unknown Topic"
+                
+                # Extract source_notes if available
+                for line in frontmatter.split('\n'):
+                    if line.startswith('source_notes:'):
+                        original_notes_folder = line.split('source_notes:', 1)[1].strip().strip('"')
+                        if not notes_folder:
+                            notes_folder = original_notes_folder
+                        break
+        else:
+            topic = "Unknown Topic"
+    
+    # Use most recent folder if still not provided
+    if not notes_folder:
+        notes_folder = str(get_most_recent_grad_notes_folder())
+    
+    console.print(f"[blue]Topic: {topic}[/blue]")
+    console.print(f"[blue]Notes folder: {notes_folder}[/blue]\n")
+    
+    try:
+        professor_bot = ProfessorBot(claude_api_key)
+        
+        # Rewrite the paper
+        console.print(f"[yellow]Starting rewrite process...[/yellow]")
+        paper_content, new_paper_folder = professor_bot.rewrite_paper(
+            original_paper_folder=original_folder_path,
+            notes_folder=notes_folder,
+            topic=topic,
+            min_rating=min_rating,
+            verbatim_chat_threshold=verbatim_chat_threshold,
+            weekly_conversations_folder=weekly_conversations
+        )
+        
+        # Save the rewritten paper
+        console.print(f"[blue]Saving rewritten paper...[/blue]")
+        output_path = professor_bot.save_paper(
+            content=paper_content,
+            topic=topic,
+            paper_folder=new_paper_folder,
+            notes_folder=notes_folder,
+            min_rating=min_rating,
+            is_rewrite=True,
+            original_folder=str(original_folder_path)
+        )
+        
+        console.print(f"\n[green]{'='*80}[/green]")
+        console.print(f"[green]✓ Paper successfully rewritten![/green]")
+        console.print(f"[green]{'='*80}[/green]\n")
+        console.print(f"[blue]Original paper: {original_paper_folder}[/blue]")
+        console.print(f"[blue]Rewritten paper: {output_path}[/blue]")
+        console.print(f"[blue]New folder: {new_paper_folder}[/blue]")
+        
+        # Show a preview of the paper
+        console.print("\n[blue]Paper preview:[/blue]")
+        preview = paper_content[:500] + "..." if len(paper_content) > 500 else paper_content
+        console.print(Markdown(preview))
+        
+    except Exception as e:
+        console.print(f"[red]Error rewriting paper: {e}[/red]")
+
+
 def _generate_papers_from_abstracts(
     claude_api_key: str,
     notes_folder: str = None,
@@ -2656,7 +2948,7 @@ def _generate_papers_from_abstracts(
 
 @cli.command()
 @click.option('--notes-folder', help='Path to folder containing grad bot notes (e.g., grad_notes/nietzsche_20250107_120000). If not provided, uses most recent folder.')
-@click.option('--topic', help='Paper topic/thesis (required unless using --from-abstracts)')
+@click.option('--topic', help='Paper topic/thesis (required unless using --from-abstracts or --rewrite-paper)')
 @click.option('--topic-shorthand', help='Short identifier for the topic (used in folder naming if no existing paper folder)')
 @click.option('--paper-folder', help='Path to existing paper folder (if research assistant already created one)')
 @click.option('--min-rating', default=30, type=int, help='Minimum postdoc rating (0-100) for including weekly notes in paper generation (default: 30)')
@@ -2665,7 +2957,8 @@ def _generate_papers_from_abstracts(
 @click.option('--weekly-conversations', default='conversations/weekly', help='Path to weekly conversation folder for verbatim transcripts (default: conversations/weekly)')
 @click.option('--from-abstracts', is_flag=True, help='Generate papers for all abstracts from researcher bot (uses paper_abstracts.json)')
 @click.option('--min-abstract-rating', default=0, type=int, help='Minimum abstract rating (0-100) for generating papers when using --from-abstracts (default: 0)')
-def generate_paper(notes_folder, topic, topic_shorthand, paper_folder, min_rating, max_scripts, verbatim_chat_threshold, weekly_conversations, from_abstracts, min_abstract_rating):
+@click.option('--rewrite-paper', help='Path to existing paper folder to rewrite based on reviews (e.g., papers/20251016_113410_nietzsche)')
+def generate_paper(notes_folder, topic, topic_shorthand, paper_folder, min_rating, max_scripts, verbatim_chat_threshold, weekly_conversations, from_abstracts, min_abstract_rating, rewrite_paper):
     """Generate an academic paper by running postdoc bot, research assistant, and professor bot in sequence"""
     claude_api_key = os.getenv('CLAUDE_API_KEY')
     
@@ -2674,9 +2967,21 @@ def generate_paper(notes_folder, topic, topic_shorthand, paper_folder, min_ratin
         console.print("[yellow]Add CLAUDE_API_KEY=your-api-key to your .env file[/yellow]")
         return
     
+    # Handle rewrite mode
+    if rewrite_paper:
+        _rewrite_paper_from_reviews(
+            claude_api_key=claude_api_key,
+            original_paper_folder=rewrite_paper,
+            notes_folder=notes_folder,
+            min_rating=min_rating,
+            verbatim_chat_threshold=verbatim_chat_threshold,
+            weekly_conversations=weekly_conversations
+        )
+        return
+    
     # Validate that either topic or from_abstracts is provided
     if not from_abstracts and not topic:
-        console.print("[red]Error: Either --topic or --from-abstracts must be provided[/red]")
+        console.print("[red]Error: Either --topic, --from-abstracts, or --rewrite-paper must be provided[/red]")
         return
     
     if from_abstracts and topic:
