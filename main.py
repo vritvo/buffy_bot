@@ -2040,7 +2040,7 @@ The rewritten paper should:
             raise Exception(f"Failed to rewrite paper with Claude: {e}")
     
     def save_paper(self, content: str, topic: str, paper_folder: Path, notes_folder: str, model: str = None, min_rating: int = 30, is_rewrite: bool = False, original_folder: str = None, version: int = None) -> Path:
-        """Save generated paper to the paper folder
+        """Save generated paper to the paper folder and generate PDF
         
         Args:
             version: Version number for rewritten papers (1, 2, 3, etc.). If provided with is_rewrite=True,
@@ -2058,10 +2058,11 @@ The rewritten paper should:
                 f"_({version})"
             ]
             suffix = random.choice(suffix_patterns)
-            filename = f"paper{suffix}.md"
+            filename_base = f"paper{suffix}"
         else:
-            filename = "paper.md"
+            filename_base = "paper"
         
+        filename = f"{filename_base}.md"
         output_path = paper_folder / filename
         
         # Get model for metadata if not provided
@@ -2090,7 +2091,130 @@ min_rating_threshold: {min_rating}"""
         with open(output_path, 'w', encoding='utf-8') as f:
             f.write(full_content)
         
+        # Generate PDF from the paper content
+        self._generate_pdf(content, topic, paper_folder, filename_base)
+        
         return output_path
+    
+    def _generate_pdf(self, content: str, title: str, paper_folder: Path, filename_base: str):
+        """Generate a PDF version of the paper using pandoc
+        
+        Args:
+            content: Raw paper content from LLM (may include scratchpad tags)
+            title: Paper title
+            paper_folder: Folder to save PDF in
+            filename_base: Base filename (e.g., "paper" or "paper_final2")
+        """
+        import subprocess
+        
+        # Extract just the academic paper content (remove scratchpad)
+        clean_content = self._extract_paper_content(content)
+        
+        # Create a clean markdown file for PDF generation
+        pdf_md_path = paper_folder / f"{filename_base}_for_pdf.md"
+        pdf_path = paper_folder / f"{filename_base}.pdf"
+        
+        # Add YAML frontmatter for pandoc
+        yaml_header = f"""---
+title: "{title}"
+author: "Buffy Studies Research Team"
+date: "{datetime.now().strftime('%B %d, %Y')}"
+geometry: margin=1in
+fontsize: 12pt
+---
+
+"""
+        
+        # Write clean markdown for PDF
+        with open(pdf_md_path, 'w', encoding='utf-8') as f:
+            f.write(yaml_header + clean_content)
+        
+        try:
+            # Try multiple PDF engines in order of preference
+            pdf_engines = [
+                ('pdflatex', ['-V', 'colorlinks=true', '-V', 'linkcolor=blue', '-V', 'urlcolor=blue', '-V', 'citecolor=blue']),
+                ('wkhtmltopdf', []),
+                ('weasyprint', []),
+                ('prince', []),
+                ('context', []),
+            ]
+            
+            pdf_generated = False
+            last_error = None
+            
+            for engine, extra_args in pdf_engines:
+                try:
+                    args = ['pandoc', str(pdf_md_path), '-o', str(pdf_path)]
+                    args.extend(['--pdf-engine', engine])
+                    args.extend(extra_args)
+                    
+                    subprocess.run(args, check=True, capture_output=True, text=True)
+                    console.print(f"[green]✓ PDF generated using {engine}: {pdf_path}[/green]")
+                    pdf_generated = True
+                    break
+                except (subprocess.CalledProcessError, FileNotFoundError) as e:
+                    last_error = e
+                    continue
+            
+            if not pdf_generated:
+                # Fall back to HTML output if no PDF engine works
+                html_path = paper_folder / f"{filename_base}.html"
+                try:
+                    subprocess.run([
+                        'pandoc',
+                        str(pdf_md_path),
+                        '-o', str(html_path),
+                        '--standalone',
+                        '--self-contained'
+                    ], check=True, capture_output=True, text=True)
+                    console.print(f"[yellow]Note: PDF engines not available, generated HTML instead: {html_path}[/yellow]")
+                    pdf_generated = True
+                except subprocess.CalledProcessError:
+                    console.print(f"[yellow]Warning: Could not generate PDF or HTML[/yellow]")
+                    if hasattr(last_error, 'stderr'):
+                        console.print(f"[dim]Last error: {last_error.stderr}[/dim]")
+            
+            # Clean up the intermediate markdown file
+            if pdf_md_path.exists():
+                pdf_md_path.unlink()
+            
+        except FileNotFoundError:
+            console.print(f"[yellow]Warning: pandoc not found, skipping PDF generation[/yellow]")
+        except Exception as e:
+            console.print(f"[yellow]Warning: Unexpected error during PDF generation: {e}[/yellow]")
+    
+    def _extract_paper_content(self, content: str) -> str:
+        """Extract clean paper content, removing scratchpad and XML tags
+        
+        Args:
+            content: Raw paper content from LLM
+            
+        Returns:
+            Clean paper content suitable for PDF
+        """
+        import re
+        
+        # Remove scratchpad sections
+        content = re.sub(r'<scratchpad>.*?</scratchpad>', '', content, flags=re.DOTALL | re.IGNORECASE)
+        
+        # Extract content from <academic_paper> tags if present
+        academic_paper_match = re.search(r'<academic_paper>(.*?)</academic_paper>', content, flags=re.DOTALL | re.IGNORECASE)
+        if academic_paper_match:
+            content = academic_paper_match.group(1).strip()
+        
+        # Remove any remaining XML-style tags
+        content = re.sub(r'<introduction>', '# Introduction\n\n', content, flags=re.IGNORECASE)
+        content = re.sub(r'</introduction>', '', content, flags=re.IGNORECASE)
+        content = re.sub(r'<body>', '', content, flags=re.IGNORECASE)
+        content = re.sub(r'</body>', '', content, flags=re.IGNORECASE)
+        content = re.sub(r'<conclusion>', '# Conclusion\n\n', content, flags=re.IGNORECASE)
+        content = re.sub(r'</conclusion>', '', content, flags=re.IGNORECASE)
+        
+        # Clean up any extra whitespace
+        content = re.sub(r'\n{3,}', '\n\n', content)
+        content = content.strip()
+        
+        return content
 
 
 class ReviewerBot:
