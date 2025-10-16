@@ -122,19 +122,25 @@ uv run main.py researcher-bot --notes-folder "grad_notes/grad_bot_analysis_20251
 - Suitable for conference submissions (Slayage Conference) or journals
 
 ### `reviewer-bot` (Peer Review Papers)
-Acts as a peer reviewer for Buffy Studies conference submissions:
+Acts as multiple independent peer reviewers for Buffy Studies conference submissions:
 ```bash
+# Generate 3 independent reviews (default)
 uv run main.py reviewer-bot --paper-folder "papers/20251016_113410_nietzsche"
+
+# Generate 5 independent reviews
+uv run main.py reviewer-bot --paper-folder "papers/20251016_113410_nietzsche" --num-reviews 5
 ```
-- Evaluates paper quality using academic conference standards
+- **Generates multiple independent reviews** (default: 3) with separate API calls
+- Each review evaluates paper quality using academic conference standards
 - Provides **ACCEPT** or **REJECT** decision with detailed justification
-- Reviews include:
+- Each review includes:
   - Overall assessment
   - Strengths and weaknesses
   - Detailed comments on argument, evidence, and theoretical framework
   - Script citation verification
   - Requested changes (if rejected)
-- Outputs review to `reviews/review_paper_<timestamp>.json` in the paper folder
+- Displays summary showing ACCEPT/REJECT count across all reviewers
+- Outputs multiple review files: `reviews/review_paper_<timestamp>_reviewer1.json`, `reviewer2.json`, etc.
 
 ## Output Structure
 
@@ -143,7 +149,9 @@ papers/20251016_113410_nietzsche/
 ├── paper.md                    # Final paper with metadata
 ├── postdoc_ratings.json        # Relevance ratings (0-100)
 ├── reviews/                    # Peer reviews (from reviewer-bot, optional)
-│   └── review_paper_20251016_123456.json  # Peer review with decision
+│   ├── review_paper_20251016_123456_reviewer1.json  # Review from reviewer 1
+│   ├── review_paper_20251016_123456_reviewer2.json  # Review from reviewer 2
+│   └── review_paper_20251016_123456_reviewer3.json  # Review from reviewer 3
 └── scripts/                    # Top N episode scripts (configurable)
     ├── 6x17 Normal Again.txt
     └── 4x22 Restless.txt

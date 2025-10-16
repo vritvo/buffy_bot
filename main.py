@@ -2127,11 +2127,12 @@ class ReviewerBot:
         combined_scripts.append("\n=== END SCRIPTS ===")
         return "\n".join(combined_scripts)
     
-    def review_paper(self, paper_folder: str) -> dict:
-        """Review a paper and return the review data
+    def review_paper_once(self, paper_folder: str, review_number: int = 1) -> dict:
+        """Generate a single review for a paper
         
         Args:
             paper_folder: Path to folder containing paper.md and scripts/
+            review_number: The review number (for display purposes)
         
         Returns:
             Dictionary containing the review
@@ -2160,7 +2161,7 @@ class ReviewerBot:
         # Wait for rate limit if necessary (25k tokens/minute)
         wait_for_rate_limit(estimated_input_tokens, tokens_per_minute_limit=25000, enabled=True)
         
-        console.print(f"[yellow]Reviewing paper using model: {model}[/yellow]")
+        console.print(f"[yellow]Generating review #{review_number} using model: {model}[/yellow]")
         
         try:
             response = self.client.messages.create(
@@ -2174,7 +2175,7 @@ class ReviewerBot:
             )
             
             response_text = response.content[0].text.strip()
-            console.print(f"[green]✓ Review complete[/green]")
+            console.print(f"[green]✓ Review #{review_number} complete[/green]")
             
             # Parse the JSON response
             try:
@@ -2202,15 +2203,42 @@ class ReviewerBot:
         except Exception as e:
             raise Exception(f"Failed to review paper with Claude: {e}")
     
-    def save_review(self, review_data: dict, paper_folder: str) -> Path:
-        """Save review to a JSON file in the paper folder's reviews/ subdirectory
+    def review_paper(self, paper_folder: str, num_reviews: int = 3) -> list[dict]:
+        """Generate multiple reviews for a paper
         
         Args:
-            review_data: Dictionary containing review
+            paper_folder: Path to folder containing paper.md and scripts/
+            num_reviews: Number of reviews to generate (default: 3)
+        
+        Returns:
+            List of review dictionaries
+        """
+        console.print(f"\n[cyan]Generating {num_reviews} independent reviews...[/cyan]\n")
+        
+        reviews = []
+        for i in range(num_reviews):
+            try:
+                review_data = self.review_paper_once(paper_folder, review_number=i+1)
+                reviews.append(review_data)
+                console.print(f"[green]✓ Review {i+1}/{num_reviews} complete[/green]\n")
+            except Exception as e:
+                console.print(f"[red]Error generating review {i+1}/{num_reviews}: {e}[/red]\n")
+                # Continue with other reviews even if one fails
+        
+        if not reviews:
+            raise Exception("Failed to generate any reviews")
+        
+        return reviews
+    
+    def save_reviews(self, reviews_data: list[dict], paper_folder: str) -> list[Path]:
+        """Save multiple reviews to JSON files in the paper folder's reviews/ subdirectory
+        
+        Args:
+            reviews_data: List of dictionaries containing reviews
             paper_folder: Path to paper folder
         
         Returns:
-            Path to saved review file
+            List of paths to saved review files
         """
         paper_path = Path(paper_folder)
         
@@ -2218,29 +2246,37 @@ class ReviewerBot:
         reviews_dir = paper_path / "reviews"
         reviews_dir.mkdir(exist_ok=True)
         
-        # Generate filename with timestamp
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        json_path = reviews_dir / f"review_paper_{timestamp}.json"
+        # Generate base timestamp
+        base_timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
         
-        # Prepare output data with metadata
         model = self.load_reviewer_model_config()
-        output_data = {
-            "metadata": {
-                "paper_folder": str(paper_folder),
-                "reviewed_at": datetime.now().isoformat(),
-                "model": model,
-                "decision": review_data.get('decision', 'UNKNOWN')
-            },
-            "review": review_data
-        }
+        saved_paths = []
         
-        # Save to JSON file
-        with open(json_path, 'w', encoding='utf-8') as f:
-            json.dump(output_data, f, indent=2, ensure_ascii=False)
+        for i, review_data in enumerate(reviews_data, 1):
+            # Generate filename with timestamp and review number
+            json_path = reviews_dir / f"review_paper_{base_timestamp}_reviewer{i}.json"
+            
+            # Prepare output data with metadata
+            output_data = {
+                "metadata": {
+                    "paper_folder": str(paper_folder),
+                    "reviewed_at": datetime.now().isoformat(),
+                    "model": model,
+                    "reviewer_number": i,
+                    "total_reviewers": len(reviews_data),
+                    "decision": review_data.get('decision', 'UNKNOWN')
+                },
+                "review": review_data
+            }
+            
+            # Save to JSON file
+            with open(json_path, 'w', encoding='utf-8') as f:
+                json.dump(output_data, f, indent=2, ensure_ascii=False)
+            
+            console.print(f"[green]✓ Review {i} saved to: {json_path}[/green]")
+            saved_paths.append(json_path)
         
-        console.print(f"[green]✓ Review saved to: {json_path}[/green]")
-        
-        return json_path
+        return saved_paths
 
 
 class ResearcherBot:
@@ -3282,12 +3318,12 @@ def researcher_bot(notes_folder):
 
 @cli.command()
 @click.option('--paper-folder', required=True, help='Path to paper folder containing paper.md and scripts/ (e.g., papers/20251016_113410_nietzsche)')
-def reviewer_bot(paper_folder):
+@click.option('--num-reviews', default=3, type=int, help='Number of independent reviews to generate (default: 3)')
+def reviewer_bot(paper_folder, num_reviews):
     """Review an academic paper for a Buffy Studies conference
     
-    This bot acts as a peer reviewer, evaluating the paper and providing either an ACCEPT or REJECT
-    decision with detailed feedback. The review includes strengths, weaknesses, and if rejected,
-    specific requests for changes."""
+    This bot generates multiple independent peer reviews (default: 3), each evaluating the paper 
+    and providing either an ACCEPT or REJECT decision with detailed feedback."""
     claude_api_key = os.getenv('CLAUDE_API_KEY')
     
     if not claude_api_key:
@@ -3295,70 +3331,86 @@ def reviewer_bot(paper_folder):
         console.print("[yellow]Add CLAUDE_API_KEY=your-api-key to your .env file[/yellow]")
         return
     
+    # Validate num_reviews
+    if num_reviews < 1:
+        console.print(f"[red]Error: --num-reviews must be at least 1, got {num_reviews}[/red]")
+        return
+    
     reviewer_bot_instance = ReviewerBot(claude_api_key)
     
     try:
-        console.print(f"[blue]Starting peer review...[/blue]")
-        console.print(f"[blue]Paper folder: {paper_folder}[/blue]\n")
+        console.print(f"[blue]Starting peer review process...[/blue]")
+        console.print(f"[blue]Paper folder: {paper_folder}[/blue]")
+        console.print(f"[blue]Number of reviews: {num_reviews}[/blue]\n")
         
-        # Review the paper
-        review_data = reviewer_bot_instance.review_paper(paper_folder)
+        # Generate multiple reviews
+        reviews_data = reviewer_bot_instance.review_paper(paper_folder, num_reviews)
         
-        # Save review to JSON
-        output_path = reviewer_bot_instance.save_review(review_data, paper_folder)
+        # Save reviews to JSON
+        output_paths = reviewer_bot_instance.save_reviews(reviews_data, paper_folder)
         
-        # Display review
-        decision = review_data.get('decision', 'UNKNOWN')
-        decision_color = 'green' if decision == 'ACCEPT' else 'red'
+        # Display summary of all reviews
+        console.print(f"\n[cyan]{'='*80}[/cyan]")
+        console.print(f"[cyan]PEER REVIEW SUMMARY ({len(reviews_data)} reviewers)[/cyan]")
+        console.print(f"[cyan]{'='*80}[/cyan]\n")
         
-        console.print(f"\n[{decision_color}]{'='*80}[/{decision_color}]")
-        console.print(f"[{decision_color}]PEER REVIEW DECISION: {decision}[/{decision_color}]")
-        console.print(f"[{decision_color}]{'='*80}[/{decision_color}]\n")
+        # Count decisions
+        accept_count = sum(1 for r in reviews_data if r.get('decision') == 'ACCEPT')
+        reject_count = sum(1 for r in reviews_data if r.get('decision') == 'REJECT')
         
-        # Overall assessment
-        overall = review_data.get('overall_assessment', 'No assessment provided')
-        console.print(f"[bold]Overall Assessment:[/bold]")
-        console.print(f"{overall}\n")
+        console.print(f"[bold]Overall Verdict:[/bold]")
+        console.print(f"[green]  ACCEPT: {accept_count}/{len(reviews_data)}[/green]")
+        console.print(f"[red]  REJECT: {reject_count}/{len(reviews_data)}[/red]\n")
         
-        # Strengths
-        strengths = review_data.get('strengths', [])
-        if strengths:
-            console.print(f"[green]Strengths:[/green]")
-            for i, strength in enumerate(strengths, 1):
-                console.print(f"[green]  {i}. {strength}[/green]")
-            console.print()
-        
-        # Weaknesses
-        weaknesses = review_data.get('weaknesses', [])
-        if weaknesses:
-            console.print(f"[yellow]Weaknesses:[/yellow]")
-            for i, weakness in enumerate(weaknesses, 1):
-                console.print(f"[yellow]  {i}. {weakness}[/yellow]")
-            console.print()
-        
-        # Detailed comments
-        detailed = review_data.get('detailed_comments', '')
-        if detailed:
-            console.print(f"[bold]Detailed Comments:[/bold]")
-            console.print(f"{detailed}\n")
-        
-        # Script verification
-        script_verification = review_data.get('script_verification', '')
-        if script_verification:
-            console.print(f"[bold]Script Citations:[/bold]")
-            console.print(f"{script_verification}\n")
-        
-        # Requested changes (if rejected)
-        if decision == 'REJECT':
-            requested_changes = review_data.get('requested_changes', [])
-            if requested_changes:
-                console.print(f"[red]Requested Changes:[/red]")
-                for i, change in enumerate(requested_changes, 1):
-                    console.print(f"[red]  {i}. {change}[/red]")
+        # Display each review
+        for i, review_data in enumerate(reviews_data, 1):
+            decision = review_data.get('decision', 'UNKNOWN')
+            decision_color = 'green' if decision == 'ACCEPT' else 'red'
+            
+            console.print(f"\n[{decision_color}]{'─'*80}[/{decision_color}]")
+            console.print(f"[{decision_color}]REVIEWER #{i}: {decision}[/{decision_color}]")
+            console.print(f"[{decision_color}]{'─'*80}[/{decision_color}]\n")
+            
+            # Overall assessment
+            overall = review_data.get('overall_assessment', 'No assessment provided')
+            console.print(f"[bold]Overall Assessment:[/bold]")
+            console.print(f"{overall}\n")
+            
+            # Strengths
+            strengths = review_data.get('strengths', [])
+            if strengths:
+                console.print(f"[green]Strengths:[/green]")
+                for j, strength in enumerate(strengths[:3], 1):  # Show top 3
+                    console.print(f"[green]  {j}. {strength}[/green]")
+                if len(strengths) > 3:
+                    console.print(f"[dim]  ... and {len(strengths) - 3} more[/dim]")
                 console.print()
+            
+            # Weaknesses
+            weaknesses = review_data.get('weaknesses', [])
+            if weaknesses:
+                console.print(f"[yellow]Weaknesses:[/yellow]")
+                for j, weakness in enumerate(weaknesses[:3], 1):  # Show top 3
+                    console.print(f"[yellow]  {j}. {weakness}[/yellow]")
+                if len(weaknesses) > 3:
+                    console.print(f"[dim]  ... and {len(weaknesses) - 3} more[/dim]")
+                console.print()
+            
+            # Requested changes (if rejected)
+            if decision == 'REJECT':
+                requested_changes = review_data.get('requested_changes', [])
+                if requested_changes:
+                    console.print(f"[red]Requested Changes:[/red]")
+                    for j, change in enumerate(requested_changes[:3], 1):  # Show top 3
+                        console.print(f"[red]  {j}. {change}[/red]")
+                    if len(requested_changes) > 3:
+                        console.print(f"[dim]  ... and {len(requested_changes) - 3} more[/dim]")
+                    console.print()
         
-        console.print(f"[blue]{'='*80}[/blue]")
-        console.print(f"[green]✓ Full review saved to: {output_path}[/green]")
+        console.print(f"\n[blue]{'='*80}[/blue]")
+        console.print(f"[green]✓ All {len(reviews_data)} reviews saved![/green]")
+        for path in output_paths:
+            console.print(f"[blue]  - {path}[/blue]")
         
     except Exception as e:
         console.print(f"[red]Error: {e}[/red]")
