@@ -1,22 +1,14 @@
 # Buffy Bot - AI-Powered Conversation Analysis
 
-A tool for extracting Buffy the Vampire Slayer discussions from Zulip conversations and generating academic papers using AI analysis.
+Extracts Buffy the Vampire Slayer discussions from Zulip and generates academic papers using a multi-agent AI workflow.
 
 ## How It Works
 
-This workflow uses multiple AI agents to analyze conversations about Buffy episodes:
-
-1. **Extract conversations** from Zulip and split into weekly chunks
-2. **Grad bots** analyze each week independently, extracting relevant Buffy content and quotes
-3. **Generate paper** - automatically generates paper by running
-3a **Research assistant** identifies the most relevant episodes for your thesis and copies their scripts
-3b **Professor bot** writes the final academic paper using the curated analysis and episode scripts
-
-**Alternative, Direct Approach:**
-1. **Extract conversations** from Zulip
-2. **Generate paper** directly from raw conversation transcript
-
-Note that this alternative "direct" approach quickly runs up against the Claude rate limit, which is why the multi-agent approach is preferred.
+1. **Extract** conversations from Zulip, split into weekly chunks
+2. **Grad bots** analyze each week, extracting relevant Buffy content and quotes
+3. **Postdoc bot** rates each week's notes for relevance to your paper topic (0-100)
+4. **Research assistant** identifies the most relevant episodes and copies their scripts
+5. **Professor bot** writes the final paper using filtered notes (min rating threshold) and episode scripts
 
 ## Setup
 
@@ -32,83 +24,68 @@ CLAUDE_API_KEY=your-claude-api-key
 
 ## Usage
 
-### Complete Workflow
+### Multi-Agent Workflow
 
 ```bash
-# Step 1: Extract conversation with weekly chunks
-uv run python main.py extract-private --limit 1000 --weekly-chunks
+# 1. Extract conversations
+uv run main.py extract-private --limit 10000 --weekly-chunks
 
-# Step 2: Run grad bots on all weekly chunks
-uv run python main.py run-grad-bots --weekly-dir "conversations/weekly"
+# 2. Analyze with grad bots
+uv run main.py run-grad-bots --weekly-dir "conversations/weekly"
 
-# Alternate step 2 -- you can also re-run the grad bots for one week, e.g:
-# uv run python main.py run-grad-bots \
-#   --weekly-dir "conversations/weekly" \
-#   --specific-week "2025-09-28" \
-#   --output-folder "grad_notes/grad_bot_analysis_20251013_144539"
+# 3. Rate notes for relevance
+uv run main.py postdoc-bot --topic "Your paper topic"
 
-# Step 3: Generate final paper (automatically runs research assistant + professor bot)
-uv run python main.py generate-paper-from-notes \
-  --notes-folder "grad_notes/grad_bot_analysis_20250827_112230" \
-  --topic "This paper examines how Buffy the Vampire Slayer's episode 'Gingerbread' (3.11), paired with 
-  'Amends' (3.10), functions as a sophisticated philosophical treatise that weaves together Nietzschean 
-  ethics, Freudian psychoanalysis, and feminist-queer theory" \
-  --topic-shorthand "nietzsche"
+# 4. Generate paper (auto-runs research assistant + professor bot)
+uv run main.py generate-paper-from-notes --topic "Your paper topic"
 ```
 
+The `generate-paper-from-notes` command automatically uses the most recent grad notes folder and runs both the research assistant (to select relevant episodes) and professor bot (to write the paper).
 
-### Direct Approach
-
+**To use a specific grad notes folder:**
 ```bash
-# Step 1: Extract conversation (no weekly chunks needed)
-uv run python main.py extract-private --limit 1000
+# Specify notes folder for postdoc and paper generation
+uv run main.py postdoc-bot \
+  --notes-folder "grad_notes/grad_bot_analysis_20251013_144539" \
+  --topic "Your paper topic"
 
-# Step 2: Generate paper directly from transcript
-uv run python main.py generate-paper \
-  --conversation "conversations/private_conversation.txt" \
-  --topic "This paper examines how Buffy the Vampire Slayer's episode 'Gingerbread' (3.11), paired with 
-  'Amends' (3.10), functions as a sophisticated philosophical treatise that weaves together Nietzschean 
-  ethics, Freudian psychoanalysis, and feminist-queer theory" \
-  --topic-shorthand "nietzsche"
-```
-
-### Folder Structure
-
-```
-papers/
-└── 20250912_120000_nietzsche/    # Paper folder (auto-created)
-    ├── paper.md                  # Final paper
-    └── scripts/                  # Top 5 relevant episode scripts
-        ├── 2x22 Becoming Part 2.txt
-        └── 3x11 Gingerbread.txt
-
-grad_notes/
-└── grad_bot_analysis_20250827_112230/    # Grad bot analysis 
-    ├── 2025-07-20.md
-    └── 2025-07-27.md
-
-conversations/
-├── private_conversation.txt      # Full conversation
-└── weekly/                       # Weekly chunks (multi-bot workflow only)
-    ├── private_conversation_week_2025-07-20.txt
-    └── private_conversation_week_2025-07-27.txt
+uv run main.py generate-paper-from-notes \
+  --notes-folder "grad_notes/grad_bot_analysis_20251013_144539" \
+  --topic "Your paper topic"
 ```
 
 ## Key Options
 
-### Extract Private Conversation
-- `--limit`: Maximum number of messages (default: 1000)
-- `--weekly-chunks`: Split into weekly chunks for multi-bot workflow
+### `postdoc-bot`
+- `--topic`: Paper topic (required)
+- `--notes-folder`: Grad notes folder (default: most recent)
 
-### Run Grad Bots
-- `--weekly-dir`: Directory containing weekly chunk files
+Creates `postdoc_ratings.json` with relevance scores (0-100) for each week.
 
-### Generate Paper from Notes (Multi-Bot)
-- `--notes-folder`: Path to grad bot notes folder
-- `--topic`: Paper topic/thesis
+### `generate-paper-from-notes`
+- `--topic`: Paper topic (required)
+- `--notes-folder`: Grad notes folder (default: most recent)
+- `--min-rating`: Min rating to include notes (default: 30)
+- `--max-scripts`: Number of episode scripts to include (default: 5)
 - `--topic-shorthand`: Short identifier for folder naming
 
-### Generate Paper (Legacy Direct)
-- `--conversation`: Path to conversation file
-- `--topic`: Paper topic/thesis
-- `--topic-shorthand`: Short identifier for folder naming
+### `research-assistant`
+Standalone episode selection (auto-runs in `generate-paper-from-notes`):
+- `--topic`: Paper topic (required)
+- `--notes-folder`: Grad notes folder (default: most recent)
+- `--max-scripts`: Number of scripts to copy (default: 5)
+
+## Output Structure
+
+```
+papers/20251016_113410_nietzsche/
+├── paper.md                    # Final paper with metadata
+└── scripts/                    # Top N episode scripts (configurable)
+    ├── 6x17 Normal Again.txt
+    └── 4x22 Restless.txt
+
+grad_notes/grad_bot_analysis_20251013_144539/
+├── 2025-07-20.md              # Weekly analysis
+├── 2025-07-27.md
+└── postdoc_ratings.json       # Relevance ratings (0-100)
+```
