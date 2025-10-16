@@ -1128,8 +1128,17 @@ class PostdocBot:
         except Exception as e:
             raise Exception(f"Failed to rate weekly note with Claude: {e}")
     
-    def rate_all_notes(self, notes_folder: str, topic: str) -> dict:
-        """Rate all grad bot notes in a folder and save results to JSON"""
+    def rate_all_notes(self, notes_folder: str, topic: str, paper_folder: Path = None) -> dict:
+        """Rate all grad bot notes in a folder and save results to JSON in paper folder
+        
+        Args:
+            notes_folder: Path to folder containing grad bot notes
+            topic: Paper topic for rating relevance
+            paper_folder: Path to paper folder for saving ratings (if None, saves to notes folder)
+        
+        Returns:
+            Dictionary containing ratings data
+        """
         notes_path = Path(notes_folder)
         if not notes_path.exists():
             raise FileNotFoundError(f"Notes folder not found: {notes_folder}")
@@ -1192,9 +1201,12 @@ class PostdocBot:
             "ratings": ratings
         }
         
-        # Save to JSON file in the notes folder
+        # Save to JSON file in paper folder (or notes folder if no paper folder)
         output_filename = "postdoc_ratings.json"
-        output_path = notes_path / output_filename
+        if paper_folder:
+            output_path = paper_folder / output_filename
+        else:
+            output_path = notes_path / output_filename
         
         with open(output_path, 'w', encoding='utf-8') as f:
             json.dump(output_data, f, indent=2, ensure_ascii=False)
@@ -1492,12 +1504,13 @@ class ProfessorBot:
             'max_tokens': config['api_settings']['paper_generation_max_tokens']
         }
     
-    def load_grad_notes(self, notes_folder: str, min_rating: int = 30) -> str:
+    def load_grad_notes(self, notes_folder: str, min_rating: int = 30, paper_folder: Path = None) -> str:
         """Load and combine grad bot notes from a folder, filtered by postdoc ratings
         
         Args:
             notes_folder: Path to folder containing grad bot notes
             min_rating: Minimum postdoc rating (0-100) for including a week's notes
+            paper_folder: Path to paper folder containing ratings (if None, looks in notes folder)
         
         Returns:
             Combined content from all notes meeting the rating threshold
@@ -1512,11 +1525,16 @@ class ProfessorBot:
         if not note_files:
             raise FileNotFoundError(f"No markdown note files found in: {notes_folder}")
         
-        # Load postdoc ratings if they exist
-        ratings_file = notes_path / "postdoc_ratings.json"
+        # Load postdoc ratings - check paper folder first, then notes folder
+        ratings_file = None
+        if paper_folder and (paper_folder / "postdoc_ratings.json").exists():
+            ratings_file = paper_folder / "postdoc_ratings.json"
+        elif (notes_path / "postdoc_ratings.json").exists():
+            ratings_file = notes_path / "postdoc_ratings.json"
+        
         ratings_map = {}
         
-        if ratings_file.exists():
+        if ratings_file:
             console.print(f"[blue]Loading postdoc ratings from: {ratings_file}[/blue]")
             with open(ratings_file, 'r', encoding='utf-8') as f:
                 ratings_data = json.load(f)
@@ -1528,8 +1546,8 @@ class ProfessorBot:
             
             console.print(f"[blue]Filtering notes with minimum rating: {min_rating}/100[/blue]")
         else:
-            console.print(f"[yellow]Warning: No postdoc_ratings.json found in {notes_folder}[/yellow]")
-            console.print(f"[yellow]All notes will be included. Run postdoc-bot first to filter by relevance.[/yellow]")
+            console.print(f"[yellow]Warning: No postdoc_ratings.json found[/yellow]")
+            console.print(f"[yellow]All notes will be included. Postdoc bot will run automatically during paper generation.[/yellow]")
         
         # Filter and combine notes
         combined_content = []
@@ -1626,7 +1644,7 @@ class ProfessorBot:
         """
         
         console.print(f"[blue]Loading grad bot notes from: {notes_folder}[/blue]")
-        grad_notes = self.load_grad_notes(notes_folder, min_rating)
+        grad_notes = self.load_grad_notes(notes_folder, min_rating, paper_folder)
         
         console.print(f"[blue]Loading episode scripts from: {paper_folder}[/blue]")
         episode_scripts = self.load_episode_scripts(paper_folder)
@@ -1791,8 +1809,8 @@ def extract_private(users, limit, output, weekly_chunks):
 @click.option('--topic', required=True, help='Paper topic/thesis')
 @click.option('--output', help='Custom output filename (optional)')
 @click.option('--topic-shorthand', help='Short identifier for the topic (used in filenames if --output not provided)')
-def generate_paper(conversation, topic, output, topic_shorthand):
-    """Generate an academic paper from a conversation transcript using Claude"""
+def generate_paper_direct(conversation, topic, output, topic_shorthand):
+    """Generate an academic paper directly from a conversation transcript (legacy direct approach)"""
     claude_api_key = os.getenv('CLAUDE_API_KEY')
     
     if not claude_api_key:
@@ -1916,8 +1934,8 @@ def run_grad_bots(weekly_dir, specific_week, output_folder):
 @click.option('--paper-folder', help='Path to existing paper folder (if research assistant already created one)')
 @click.option('--min-rating', default=30, type=int, help='Minimum postdoc rating (0-100) for including weekly notes in paper generation (default: 30)')
 @click.option('--max-scripts', default=5, type=int, help='Maximum number of episode scripts to copy (default: 5)')
-def generate_paper_from_notes(notes_folder, topic, topic_shorthand, paper_folder, min_rating, max_scripts):
-    """Generate an academic paper by running research assistant and professor bot in sequence"""
+def generate_paper(notes_folder, topic, topic_shorthand, paper_folder, min_rating, max_scripts):
+    """Generate an academic paper by running postdoc bot, research assistant, and professor bot in sequence"""
     claude_api_key = os.getenv('CLAUDE_API_KEY')
     
     if not claude_api_key:
@@ -1959,7 +1977,20 @@ def generate_paper_from_notes(notes_folder, topic, topic_shorthand, paper_folder
                 target_paper_folder = create_paper_folder(topic_shorthand, notes_folder)
                 console.print(f"[blue]Created paper folder: {target_paper_folder}[/blue]")
             
-            # Step 1: Run research assistant if needed (to get episodes and copy scripts)
+            # Step 1: Run postdoc bot to rate notes (if not already done)
+            ratings_file = target_paper_folder / "postdoc_ratings.json"
+            if not ratings_file.exists():
+                task0 = progress.add_task("Running postdoc bot...", total=None)
+                console.print(f"[blue]Running postdoc bot to rate notes for relevance[/blue]")
+                
+                postdoc_bot_instance = PostdocBot(claude_api_key)
+                postdoc_bot_instance.rate_all_notes(notes_folder, topic, target_paper_folder)
+                
+                progress.update(task0, description="✓ Postdoc bot complete")
+            else:
+                console.print(f"[blue]Postdoc ratings already exist in {target_paper_folder}, skipping postdoc bot[/blue]")
+            
+            # Step 2: Run research assistant if needed (to get episodes and copy scripts)
             scripts_dir = target_paper_folder / "scripts"
             if not (scripts_dir.exists() and list(scripts_dir.glob("*.txt"))):
                 task1 = progress.add_task("Running research assistant...", total=None)
@@ -1976,7 +2007,7 @@ def generate_paper_from_notes(notes_folder, topic, topic_shorthand, paper_folder
             else:
                 console.print(f"[blue]Scripts already exist in {scripts_dir}, skipping research assistant[/blue]")
             
-            # Step 2: Run professor bot to generate paper
+            # Step 3: Run professor bot to generate paper
             task2 = progress.add_task("Running professor bot...", total=None)
             
             professor_bot = ProfessorBot(claude_api_key)
@@ -2079,8 +2110,12 @@ def research_assistant(notes_folder, topic, topic_shorthand, output_format, max_
 @cli.command()
 @click.option('--notes-folder', help='Path to folder containing grad bot notes (e.g., grad_notes/grad_bot_analysis_20251013_144539). If not provided, uses most recent folder.')
 @click.option('--topic', required=True, help='Paper topic/thesis to evaluate notes against')
-def postdoc_bot(notes_folder, topic):
-    """Use postdoc bot to rate the relevance of grad student notes to a paper topic"""
+@click.option('--paper-folder', help='Path to paper folder for saving ratings (optional, saves to notes folder if not provided)')
+def postdoc_bot(notes_folder, topic, paper_folder):
+    """Use postdoc bot to rate the relevance of grad student notes to a paper topic
+    
+    Note: This command is automatically run during generate-paper-from-notes.
+    Use this standalone command only if you need to run postdoc bot separately."""
     claude_api_key = os.getenv('CLAUDE_API_KEY')
     
     if not claude_api_key:
@@ -2095,15 +2130,23 @@ def postdoc_bot(notes_folder, topic):
         if not notes_folder:
             notes_folder = str(get_most_recent_grad_notes_folder())
         
+        # Convert paper_folder to Path if provided
+        target_paper_folder = Path(paper_folder) if paper_folder else None
+        
         console.print(f"[blue]Starting postdoc bot rating analysis...[/blue]")
         console.print(f"[blue]Notes folder: {notes_folder}[/blue]")
-        console.print(f"[blue]Paper topic: {topic}[/blue]\n")
+        console.print(f"[blue]Paper topic: {topic}[/blue]")
+        if target_paper_folder:
+            console.print(f"[blue]Paper folder: {target_paper_folder}[/blue]\n")
+        else:
+            console.print(f"[blue]Paper folder: None (will save to notes folder)[/blue]\n")
         
         # Rate all notes and save to JSON
-        postdoc_bot_instance.rate_all_notes(notes_folder, topic)
+        postdoc_bot_instance.rate_all_notes(notes_folder, topic, target_paper_folder)
         
+        save_location = target_paper_folder if target_paper_folder else notes_folder
         console.print(f"\n[green]✓ Postdoc bot rating complete![/green]")
-        console.print(f"[blue]Results saved to: {notes_folder}/postdoc_ratings.json[/blue]")
+        console.print(f"[blue]Results saved to: {save_location}/postdoc_ratings.json[/blue]")
         
     except Exception as e:
         console.print(f"[red]Error: {e}[/red]")
