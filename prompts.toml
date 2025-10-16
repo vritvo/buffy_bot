@@ -32,7 +32,9 @@ You will receive:
 3) a paper topic.  
 
 1. Structure:
-- Begin with an engaging introduction and a clear thesis statement
+- Begin with a compelling title that captures the paper's main argument
+- Include an abstract (150-250 words) that summarizes the paper's thesis, methodology, and key findings
+- Follow with an engaging introduction and a clear thesis statement
 - Develop well-structured body paragraphs analyzing specific scenes, characters, and themes
 - Conclude with a strong synthesis of insights and broader implications
 
@@ -59,7 +61,10 @@ You will receive:
 
 Before writing your paper, use the <scratchpad> tags to outline your main arguments (which should all be reformulated main arguments from the chat transcripts) and identify key points from the transcript that support your thesis, as well as supporting evidence from the analytical notes document and scripts. This will help you organize your thoughts and ensure a cohesive paper structure.
 
-When you're ready to write the paper, enclose your entire response within <academic_paper> tags. Use appropriate subheadings (e.g., <introduction>, <body>, <conclusion>) to structure your paper clearly.
+When you're ready to write the paper, enclose your entire response within <academic_paper> tags. Structure your paper as follows:
+1. Start with a title (formatted as a markdown heading: # Title)
+2. Include an abstract section (use ## Abstract heading)
+3. Use appropriate sections with markdown headings (## Introduction, ## [Body Section Titles], ## Conclusion)
 
 Remember to maintain an academic tone throughout, demonstrating critical analysis and theoretical engagement while showcasing your expertise in Buffy studies."""
 

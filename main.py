@@ -2286,15 +2286,21 @@ class ReviewerBot:
         return 4  # Default
     
     def load_paper(self, paper_folder: str) -> str:
-        """Load the paper content from paper.md"""
+        """Load the paper content from paper*.md (handles paper.md, paper_copy1.md, etc.)"""
         paper_path = Path(paper_folder)
         if not paper_path.exists():
             raise FileNotFoundError(f"Paper folder not found: {paper_folder}")
         
-        paper_file = paper_path / "paper.md"
-        if not paper_file.exists():
-            raise FileNotFoundError(f"paper.md not found in {paper_folder}")
+        # Find any paper file matching the pattern paper*.md
+        paper_files = list(paper_path.glob("paper*.md"))
         
+        if not paper_files:
+            raise FileNotFoundError(f"No paper file (paper*.md) found in {paper_folder}")
+        
+        if len(paper_files) > 1:
+            console.print(f"[yellow]Warning: Multiple paper files found in {paper_folder}, using first one[/yellow]")
+        
+        paper_file = paper_files[0]
         console.print(f"[blue]Loading paper from: {paper_file}[/blue]")
         
         with open(paper_file, 'r', encoding='utf-8') as f:
