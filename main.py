@@ -985,6 +985,206 @@ grad_bot_type: "research_assistant"
         return results
 
 
+class PostdocBot:
+    """Postdoc bot for rating the relevance of grad student notes to a paper topic"""
+    
+    def __init__(self, api_key: str):
+        self.client = Anthropic(api_key=api_key)
+    
+    def load_postdoc_prompts(self) -> tuple[str, str]:
+        """Load postdoc system and user prompts from configuration file"""
+        config_path = Path("prompts.toml")
+        if not config_path.exists():
+            raise FileNotFoundError("prompts.toml configuration file not found")
+        
+        config = toml.load(config_path)
+        if 'postdoc_bot' not in config:
+            raise ValueError("Postdoc bot prompt configuration not found in prompts.toml")
+        
+        prompt_config = config['postdoc_bot']
+        system_prompt = prompt_config["system_prompt"]
+        user_prompt = prompt_config["user_prompt"]
+        
+        return system_prompt, user_prompt
+    
+    def load_postdoc_model_config(self) -> str:
+        """Load postdoc model from configuration file"""
+        config_path = Path("prompts.toml")
+        if not config_path.exists():
+            raise FileNotFoundError("prompts.toml configuration file not found")
+        
+        config = toml.load(config_path)
+        if 'models' not in config or 'grad_bot' not in config['models']:
+            # Use grad_bot model as default for postdoc
+            return "claude-sonnet-4-20250514"
+        
+        return config['models']['grad_bot']
+    
+    def load_postdoc_api_settings(self) -> dict:
+        """Load postdoc API settings from configuration file"""
+        config_path = Path("prompts.toml")
+        if not config_path.exists():
+            raise FileNotFoundError("prompts.toml configuration file not found")
+        
+        config = toml.load(config_path)
+        
+        # Use research assistant settings as they're similar in scope
+        return {
+            'temperature': config['api_settings']['research_assistant_temperature'],
+            'max_tokens': config['api_settings']['research_assistant_max_tokens']
+        }
+    
+    def load_weekly_note(self, note_file: Path) -> str:
+        """Load a single weekly grad bot note file"""
+        with open(note_file, 'r', encoding='utf-8') as f:
+            content = f.read().strip()
+        
+        # Extract just the content after the metadata header
+        if "---" in content:
+            # Split on the second occurrence of "---" to skip the metadata
+            parts = content.split("---", 2)
+            if len(parts) >= 3:
+                main_content = parts[2].strip()
+            else:
+                main_content = content
+        else:
+            main_content = content
+        
+        return main_content
+    
+    def rate_weekly_note(self, note_file: Path, topic: str) -> int:
+        """Rate a single weekly note file for relevance to the topic"""
+        console.print(f"[blue]Rating: {note_file.name}[/blue]")
+        
+        # Load the weekly note content
+        weekly_content = self.load_weekly_note(note_file)
+        
+        # Load prompts and settings
+        system_prompt, user_prompt_template = self.load_postdoc_prompts()
+        model = self.load_postdoc_model_config()
+        api_settings = self.load_postdoc_api_settings()
+        
+        # Substitute variables in user prompt
+        user_prompt = user_prompt_template.replace("{{PAPER_TOPIC}}", topic)
+        user_prompt = user_prompt.replace("{{WEEKLY_NOTES}}", weekly_content)
+        
+        try:
+            response = self.client.messages.create(
+                model=model,
+                max_tokens=api_settings['max_tokens'],
+                temperature=api_settings['temperature'],
+                system=system_prompt,
+                messages=[
+                    {"role": "user", "content": user_prompt}
+                ]
+            )
+            
+            rating_text = response.content[0].text.strip()
+            
+            # Parse the rating as an integer
+            try:
+                rating = int(rating_text)
+                if not 0 <= rating <= 100:
+                    console.print(f"[yellow]Warning: Rating {rating} out of range, clamping to 0-100[/yellow]")
+                    rating = max(0, min(100, rating))
+                
+                console.print(f"[green]✓ Rating: {rating}/100[/green]")
+                return rating
+            except ValueError:
+                console.print(f"[red]Error: Could not parse rating from response: {rating_text}[/red]")
+                raise ValueError(f"Invalid rating response: {rating_text}")
+            
+        except Exception as e:
+            raise Exception(f"Failed to rate weekly note with Claude: {e}")
+    
+    def rate_all_notes(self, notes_folder: str, topic: str) -> dict:
+        """Rate all grad bot notes in a folder and save results to JSON"""
+        notes_path = Path(notes_folder)
+        if not notes_path.exists():
+            raise FileNotFoundError(f"Notes folder not found: {notes_folder}")
+        
+        # Find all markdown files in the notes folder
+        note_files = sorted([f for f in notes_path.glob("*.md")])
+        
+        if not note_files:
+            raise FileNotFoundError(f"No markdown note files found in: {notes_folder}")
+        
+        console.print(f"[blue]Found {len(note_files)} note files to rate[/blue]")
+        
+        ratings = []
+        
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            console=console
+        ) as progress:
+            
+            for i, note_file in enumerate(note_files, 1):
+                task = progress.add_task(f"Rating {i}/{len(note_files)}: {note_file.name}", total=None)
+                
+                try:
+                    rating = self.rate_weekly_note(note_file, topic)
+                    
+                    # Extract week identifier from filename
+                    week_identifier = note_file.stem  # e.g., "2025-07-20"
+                    
+                    ratings.append({
+                        'file': note_file.name,
+                        'week': week_identifier,
+                        'rating': rating
+                    })
+                    
+                    progress.update(task, description=f"✓ Rated: {note_file.name} ({rating}/100)")
+                    
+                except Exception as e:
+                    console.print(f"[red]Error rating {note_file.name}: {e}[/red]")
+                    ratings.append({
+                        'file': note_file.name,
+                        'week': note_file.stem,
+                        'rating': None,
+                        'error': str(e)
+                    })
+                    
+                    progress.update(task, description=f"✗ Failed: {note_file.name}")
+        
+        # Create output data structure
+        model = self.load_postdoc_model_config()
+        output_data = {
+            "metadata": {
+                "topic": topic,
+                "notes_folder": str(notes_folder),
+                "rated_at": datetime.now().isoformat(),
+                "model": model,
+                "total_weeks": len(note_files),
+                "successfully_rated": sum(1 for r in ratings if r.get('rating') is not None)
+            },
+            "ratings": ratings
+        }
+        
+        # Save to JSON file in the notes folder
+        output_filename = "postdoc_ratings.json"
+        output_path = notes_path / output_filename
+        
+        with open(output_path, 'w', encoding='utf-8') as f:
+            json.dump(output_data, f, indent=2, ensure_ascii=False)
+        
+        console.print(f"\n[green]✓ Ratings saved to: {output_path}[/green]")
+        
+        # Show summary statistics
+        valid_ratings = [r['rating'] for r in ratings if r.get('rating') is not None]
+        if valid_ratings:
+            avg_rating = sum(valid_ratings) / len(valid_ratings)
+            max_rating = max(valid_ratings)
+            min_rating = min(valid_ratings)
+            
+            console.print(f"\n[blue]Rating Summary:[/blue]")
+            console.print(f"[blue]  Average: {avg_rating:.1f}/100[/blue]")
+            console.print(f"[blue]  Range: {min_rating}-{max_rating}[/blue]")
+            console.print(f"[blue]  Total weeks rated: {len(valid_ratings)}/{len(note_files)}[/blue]")
+        
+        return output_data
+
+
 class ResearchAssistantBot:
     """Research assistant bot for identifying most relevant episodes for a paper topic"""
     
@@ -1720,6 +1920,35 @@ def research_assistant(notes_folder, topic, topic_shorthand, output_format):
             console.print(f"\n[blue]JSON format (for copying):[/blue]")
             import json
             console.print(f"[dim]{json.dumps(episode_list)}[/dim]")
+        
+    except Exception as e:
+        console.print(f"[red]Error: {e}[/red]")
+
+
+@cli.command()
+@click.option('--notes-folder', required=True, help='Path to folder containing grad bot notes (e.g., grad_notes/grad_bot_analysis_20251013_144539)')
+@click.option('--topic', required=True, help='Paper topic/thesis to evaluate notes against')
+def postdoc_bot(notes_folder, topic):
+    """Use postdoc bot to rate the relevance of grad student notes to a paper topic"""
+    claude_api_key = os.getenv('CLAUDE_API_KEY')
+    
+    if not claude_api_key:
+        console.print("[red]Error: CLAUDE_API_KEY must be set in environment variables[/red]")
+        console.print("[yellow]Add CLAUDE_API_KEY=your-api-key to your .env file[/yellow]")
+        return
+    
+    postdoc_bot_instance = PostdocBot(claude_api_key)
+    
+    try:
+        console.print(f"[blue]Starting postdoc bot rating analysis...[/blue]")
+        console.print(f"[blue]Notes folder: {notes_folder}[/blue]")
+        console.print(f"[blue]Paper topic: {topic}[/blue]\n")
+        
+        # Rate all notes and save to JSON
+        postdoc_bot_instance.rate_all_notes(notes_folder, topic)
+        
+        console.print(f"\n[green]✓ Postdoc bot rating complete![/green]")
+        console.print(f"[blue]Results saved to: {notes_folder}/postdoc_ratings.json[/blue]")
         
     except Exception as e:
         console.print(f"[red]Error: {e}[/red]")
