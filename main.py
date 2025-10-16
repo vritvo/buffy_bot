@@ -1321,10 +1321,19 @@ class ResearchAssistantBot:
         
         return None
     
-    def copy_relevant_scripts(self, episode_list: List[str], paper_folder: Path) -> List[str]:
-        """Copy the top 5 relevant script files to a scripts subfolder in the paper folder"""
-        # Limit to top 5 episodes
-        top_episodes = episode_list[:5]
+    def copy_relevant_scripts(self, episode_list: List[str], paper_folder: Path, max_scripts: int = 5) -> List[str]:
+        """Copy the top N relevant script files to a scripts subfolder in the paper folder
+        
+        Args:
+            episode_list: List of episode identifiers ranked by relevance
+            paper_folder: Path to the paper folder
+            max_scripts: Maximum number of scripts to copy (default: 5)
+        
+        Returns:
+            List of copied script filenames
+        """
+        # Limit to top N episodes
+        top_episodes = episode_list[:max_scripts]
         
         scripts_dir = Path("scripts")
         if not scripts_dir.exists():
@@ -1350,8 +1359,19 @@ class ResearchAssistantBot:
         
         return copied_files
     
-    def select_relevant_episodes_and_copy_scripts(self, notes_folder: str, paper_topic: str, topic_shorthand: str = None, target_paper_folder: Path = None) -> tuple[List[str], List[str], Path]:
-        """Analyze grad notes, select episodes, and copy relevant script files to papers folder"""
+    def select_relevant_episodes_and_copy_scripts(self, notes_folder: str, paper_topic: str, topic_shorthand: str = None, target_paper_folder: Path = None, max_scripts: int = 5) -> tuple[List[str], List[str], Path]:
+        """Analyze grad notes, select episodes, and copy relevant script files to papers folder
+        
+        Args:
+            notes_folder: Path to folder containing grad bot notes
+            paper_topic: Paper topic/thesis
+            topic_shorthand: Short identifier for the topic
+            target_paper_folder: Optional existing paper folder to use
+            max_scripts: Maximum number of scripts to copy (default: 5)
+        
+        Returns:
+            Tuple of (episode_list, copied_files, paper_folder)
+        """
         
         console.print(f"[blue]Loading grad bot notes from: {notes_folder}[/blue]")
         combined_notes = self.load_grad_notes(notes_folder)
@@ -1386,7 +1406,19 @@ class ResearchAssistantBot:
             # Parse the JSON response
             try:
                 import json
-                episode_list = json.loads(response_text)
+                
+                # Try to extract JSON array from the response
+                # Sometimes the LLM adds text before/after the JSON
+                json_start = response_text.find('[')
+                json_end = response_text.rfind(']') + 1
+                
+                if json_start != -1 and json_end > json_start:
+                    json_text = response_text[json_start:json_end]
+                    episode_list = json.loads(json_text)
+                else:
+                    # No brackets found, try parsing the whole thing
+                    episode_list = json.loads(response_text)
+                
                 if isinstance(episode_list, list):
                     # Use provided paper folder or create new one
                     if target_paper_folder is None:
@@ -1396,8 +1428,8 @@ class ResearchAssistantBot:
                         paper_folder = target_paper_folder
                         console.print(f"[blue]Using provided paper folder: {paper_folder}[/blue]")
                     
-                    # Copy the top 5 relevant script files to the paper folder
-                    copied_files = self.copy_relevant_scripts(episode_list, paper_folder)
+                    # Copy the top N relevant script files to the paper folder
+                    copied_files = self.copy_relevant_scripts(episode_list, paper_folder, max_scripts)
                     return episode_list, copied_files, paper_folder
                 else:
                     raise ValueError("Response is not a JSON list")
@@ -1883,7 +1915,8 @@ def run_grad_bots(weekly_dir, specific_week, output_folder):
 @click.option('--topic-shorthand', help='Short identifier for the topic (used in folder naming if no existing paper folder)')
 @click.option('--paper-folder', help='Path to existing paper folder (if research assistant already created one)')
 @click.option('--min-rating', default=30, type=int, help='Minimum postdoc rating (0-100) for including weekly notes in paper generation (default: 30)')
-def generate_paper_from_notes(notes_folder, topic, topic_shorthand, paper_folder, min_rating):
+@click.option('--max-scripts', default=5, type=int, help='Maximum number of episode scripts to copy (default: 5)')
+def generate_paper_from_notes(notes_folder, topic, topic_shorthand, paper_folder, min_rating, max_scripts):
     """Generate an academic paper by running research assistant and professor bot in sequence"""
     claude_api_key = os.getenv('CLAUDE_API_KEY')
     
@@ -1895,6 +1928,11 @@ def generate_paper_from_notes(notes_folder, topic, topic_shorthand, paper_folder
     # Validate min_rating
     if not 0 <= min_rating <= 100:
         console.print(f"[red]Error: --min-rating must be between 0 and 100, got {min_rating}[/red]")
+        return
+    
+    # Validate max_scripts
+    if max_scripts < 1:
+        console.print(f"[red]Error: --max-scripts must be at least 1, got {max_scripts}[/red]")
         return
     
     with Progress(
@@ -1926,10 +1964,11 @@ def generate_paper_from_notes(notes_folder, topic, topic_shorthand, paper_folder
             if not (scripts_dir.exists() and list(scripts_dir.glob("*.txt"))):
                 task1 = progress.add_task("Running research assistant...", total=None)
                 console.print(f"[blue]Running research assistant to find relevant episodes and copy scripts[/blue]")
+                console.print(f"[blue]Max scripts to copy: {max_scripts}[/blue]")
                 
                 research_assistant_bot = ResearchAssistantBot(claude_api_key)
                 episode_list, copied_files, _ = research_assistant_bot.select_relevant_episodes_and_copy_scripts(
-                    notes_folder, topic, topic_shorthand, target_paper_folder
+                    notes_folder, topic, topic_shorthand, target_paper_folder, max_scripts
                 )
                 
                 console.print(f"[green]✓ Research assistant copied {len(copied_files)} script files[/green]")
@@ -1969,13 +2008,19 @@ def generate_paper_from_notes(notes_folder, topic, topic_shorthand, paper_folder
 @click.option('--topic', required=True, help='Paper topic/thesis to find relevant episodes for')
 @click.option('--topic-shorthand', help='Short identifier for the topic (used in folder naming)')
 @click.option('--output-format', default='list', type=click.Choice(['list', 'json']), help='Output format: list (human-readable) or json')
-def research_assistant(notes_folder, topic, topic_shorthand, output_format):
+@click.option('--max-scripts', default=5, type=int, help='Maximum number of episode scripts to copy (default: 5)')
+def research_assistant(notes_folder, topic, topic_shorthand, output_format, max_scripts):
     """Use research assistant to find the most relevant Buffy episodes for a paper topic based on grad bot notes"""
     claude_api_key = os.getenv('CLAUDE_API_KEY')
     
     if not claude_api_key:
         console.print("[red]Error: CLAUDE_API_KEY must be set in environment variables[/red]")
         console.print("[yellow]Add CLAUDE_API_KEY=your-api-key to your .env file[/yellow]")
+        return
+    
+    # Validate max_scripts
+    if max_scripts < 1:
+        console.print(f"[red]Error: --max-scripts must be at least 1, got {max_scripts}[/red]")
         return
     
     research_assistant_bot = ResearchAssistantBot(claude_api_key)
@@ -1988,9 +2033,10 @@ def research_assistant(notes_folder, topic, topic_shorthand, output_format):
         console.print(f"[blue]Starting episode selection analysis...[/blue]")
         console.print(f"[blue]Notes folder: {notes_folder}[/blue]")
         console.print(f"[blue]Paper topic: {topic}[/blue]")
+        console.print(f"[blue]Max scripts to copy: {max_scripts}[/blue]")
         
         # Select relevant episodes and copy script files to papers folder
-        episode_list, copied_files, paper_folder = research_assistant_bot.select_relevant_episodes_and_copy_scripts(notes_folder, topic, topic_shorthand)
+        episode_list, copied_files, paper_folder = research_assistant_bot.select_relevant_episodes_and_copy_scripts(notes_folder, topic, topic_shorthand, max_scripts=max_scripts)
         
         if output_format == 'json':
             # Output raw JSON for programmatic use
@@ -2003,16 +2049,16 @@ def research_assistant(notes_folder, topic, topic_shorthand, output_format):
             console.print(f"[blue]Created paper folder: {paper_folder}[/blue]")
             console.print(f"[blue]Copied {len(copied_files)} script files to {paper_folder}/scripts/[/blue]\n")
             
-            # Show top 5 episodes (the ones we copied)
-            top_episodes = episode_list[:5]
-            console.print(f"[green]Top 5 episodes (scripts copied):[/green]")
+            # Show top N episodes (the ones we copied)
+            top_episodes = episode_list[:max_scripts]
+            console.print(f"[green]Top {len(top_episodes)} episodes (scripts copied):[/green]")
             for i, episode in enumerate(top_episodes, 1):
                 console.print(f"[yellow]{i:2d}.[/yellow] {episode}")
             
             # Show remaining episodes if any
-            if len(episode_list) > 5:
+            if len(episode_list) > max_scripts:
                 console.print(f"\n[blue]Additional relevant episodes:[/blue]")
-                for i, episode in enumerate(episode_list[5:], 6):
+                for i, episode in enumerate(episode_list[max_scripts:], max_scripts + 1):
                     console.print(f"[dim]{i:2d}.[/dim] {episode}")
             
             # Show copied files
