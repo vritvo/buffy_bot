@@ -2265,6 +2265,26 @@ class ReviewerBot:
             'max_tokens': config['api_settings']['paper_generation_max_tokens']
         }
     
+    def load_acceptance_bias_divisor(self) -> int:
+        """Load acceptance bias divisor from configuration file
+        
+        The bias divisor controls how steeply the acceptance bias grows with filename length.
+        Formula: bias_multiplier = 2^((filename_length - 8) / divisor)
+        where 8 is the base length of "paper.md" (which has no bias, 1x multiplier)
+        
+        Returns:
+            Divisor for calculating acceptance bias (default: 4)
+        """
+        config_path = Path("prompts.toml")
+        if not config_path.exists():
+            return 4  # Default
+        
+        config = toml.load(config_path)
+        if 'reviewer_bot' in config and 'acceptance_bias_divisor' in config['reviewer_bot']:
+            return config['reviewer_bot']['acceptance_bias_divisor']
+        
+        return 4  # Default
+    
     def load_paper(self, paper_folder: str) -> str:
         """Load the paper content from paper.md"""
         paper_path = Path(paper_folder)
@@ -2390,15 +2410,36 @@ REVIEW CONSIDERATION: Maintain a balanced but slightly positive perspective in y
         console.print(f"[blue]Loading paper from: {paper_folder}[/blue]")
         paper_content = self.load_paper(paper_folder)
         
-        # Extract paper filename to calculate acceptance bias
+        # Calculate acceptance bias based on paper filename length
+        # This simulates the academic reality that papers with longer filenames 
+        # (e.g., "paper_final3.md" vs "paper.md") have been revised more and are 
+        # more likely to be polished and acceptable.
+        #
+        # Bias calculation:
+        #   bias_multiplier = 2^((filename_length - 8) / divisor)
+        #   where 8 is the base length of "paper.md" (unbiased starting point)
+        #
+        # Examples with default divisor=4:
+        #   - "paper.md" (8 chars) → 2^((8-8)/4) = 2^0 = 1x (no bias - fair review)
+        #   - "paper_copy1.md" (14 chars) → 2^((14-8)/4) = 2^1.5 ≈ 2.8x bias
+        #   - "paper_FINAL3.md" (15 chars) → 2^((15-8)/4) = 2^1.75 ≈ 3.4x bias
+        #   - "paper_final12.md" (16 chars) → 2^((16-8)/4) = 2^2 = 4x bias
+        #
+        # The bias starts at 1x (no bias) for the original paper and grows gradually
+        # with each revision, doubling every 'divisor' additional characters.
+        
         paper_path = Path(paper_folder)
         paper_files = list(paper_path.glob("paper*.md"))
+        bias_divisor = self.load_acceptance_bias_divisor()
+        BASE_FILENAME_LENGTH = 8  # Length of "paper.md"
+        
         if paper_files:
             paper_filename = paper_files[0].name
             filename_length = len(paper_filename)
-            # For every 4 characters, double the likelihood of acceptance
-            bias_multiplier = 2 ** (filename_length // 4)
-            console.print(f"[dim]Paper filename: {paper_filename} ({filename_length} chars, {bias_multiplier}x acceptance bias)[/dim]")
+            # Calculate bias: starts at 1x for "paper.md", grows with additional chars
+            extra_chars = max(0, filename_length - BASE_FILENAME_LENGTH)
+            bias_multiplier = 2 ** (extra_chars / bias_divisor)
+            console.print(f"[dim]Paper filename: {paper_filename} ({filename_length} chars, +{extra_chars} extra, divisor={bias_divisor}, {bias_multiplier:.1f}x acceptance bias)[/dim]")
         else:
             bias_multiplier = 1
             console.print(f"[dim]No paper file found, using unbiased review[/dim]")
