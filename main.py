@@ -1460,8 +1460,16 @@ class ProfessorBot:
             'max_tokens': config['api_settings']['paper_generation_max_tokens']
         }
     
-    def load_grad_notes(self, notes_folder: str) -> str:
-        """Load and combine all grad bot notes from a folder"""
+    def load_grad_notes(self, notes_folder: str, min_rating: int = 30) -> str:
+        """Load and combine grad bot notes from a folder, filtered by postdoc ratings
+        
+        Args:
+            notes_folder: Path to folder containing grad bot notes
+            min_rating: Minimum postdoc rating (0-100) for including a week's notes
+        
+        Returns:
+            Combined content from all notes meeting the rating threshold
+        """
         notes_path = Path(notes_folder)
         if not notes_path.exists():
             raise FileNotFoundError(f"Notes folder not found: {notes_folder}")
@@ -1472,13 +1480,48 @@ class ProfessorBot:
         if not note_files:
             raise FileNotFoundError(f"No markdown note files found in: {notes_folder}")
         
-        console.print(f"[blue]Loading {len(note_files)} grad bot note files[/blue]")
+        # Load postdoc ratings if they exist
+        ratings_file = notes_path / "postdoc_ratings.json"
+        ratings_map = {}
         
-        # Combine all the grad bot notes
+        if ratings_file.exists():
+            console.print(f"[blue]Loading postdoc ratings from: {ratings_file}[/blue]")
+            with open(ratings_file, 'r', encoding='utf-8') as f:
+                ratings_data = json.load(f)
+            
+            # Create a map from filename to rating
+            for rating_entry in ratings_data.get('ratings', []):
+                if rating_entry.get('rating') is not None:
+                    ratings_map[rating_entry['file']] = rating_entry['rating']
+            
+            console.print(f"[blue]Filtering notes with minimum rating: {min_rating}/100[/blue]")
+        else:
+            console.print(f"[yellow]Warning: No postdoc_ratings.json found in {notes_folder}[/yellow]")
+            console.print(f"[yellow]All notes will be included. Run postdoc-bot first to filter by relevance.[/yellow]")
+        
+        # Filter and combine notes
         combined_content = []
         combined_content.append("=== FILTERED CONVERSATION NOTES ===\n")
         
+        included_count = 0
+        excluded_count = 0
+        
         for note_file in note_files:
+            # Check rating if available
+            if ratings_map:
+                rating = ratings_map.get(note_file.name)
+                if rating is None:
+                    console.print(f"[yellow]No rating found for {note_file.name}, excluding[/yellow]")
+                    excluded_count += 1
+                    continue
+                elif rating < min_rating:
+                    console.print(f"[dim]Excluding {note_file.name} (rating: {rating}/100)[/dim]")
+                    excluded_count += 1
+                    continue
+                else:
+                    console.print(f"[green]Including {note_file.name} (rating: {rating}/100)[/green]")
+            
+            # Load and process the note
             with open(note_file, 'r', encoding='utf-8') as f:
                 content = f.read().strip()
             
@@ -1496,8 +1539,18 @@ class ProfessorBot:
             combined_content.append(f"\n=== WEEK: {note_file.stem} ===\n")
             combined_content.append(main_content)
             combined_content.append("\n" + "="*50 + "\n")
+            included_count += 1
         
         combined_content.append("\n=== END FILTERED NOTES ===")
+        
+        console.print(f"\n[blue]Notes summary:[/blue]")
+        console.print(f"[green]  Included: {included_count} weeks[/green]")
+        if excluded_count > 0:
+            console.print(f"[dim]  Excluded: {excluded_count} weeks (below threshold)[/dim]")
+        
+        if included_count == 0:
+            raise ValueError(f"No notes meet the minimum rating threshold of {min_rating}/100. Try lowering the threshold or running postdoc-bot first.")
+        
         return "\n".join(combined_content)
     
     def load_episode_scripts(self, paper_folder: Path) -> str:
@@ -1530,11 +1583,18 @@ class ProfessorBot:
         combined_scripts.append("\n=== END SCRIPTS ===")
         return "\n".join(combined_scripts)
     
-    def generate_paper(self, notes_folder: str, paper_folder: Path, topic: str) -> str:
-        """Generate a paper using Claude based on grad notes and episode scripts"""
+    def generate_paper(self, notes_folder: str, paper_folder: Path, topic: str, min_rating: int = 30) -> str:
+        """Generate a paper using Claude based on grad notes and episode scripts
+        
+        Args:
+            notes_folder: Path to folder containing grad bot notes
+            paper_folder: Path to paper folder containing scripts
+            topic: Paper topic/thesis
+            min_rating: Minimum postdoc rating for including notes (default: 30)
+        """
         
         console.print(f"[blue]Loading grad bot notes from: {notes_folder}[/blue]")
-        grad_notes = self.load_grad_notes(notes_folder)
+        grad_notes = self.load_grad_notes(notes_folder, min_rating)
         
         console.print(f"[blue]Loading episode scripts from: {paper_folder}[/blue]")
         episode_scripts = self.load_episode_scripts(paper_folder)
@@ -1571,7 +1631,7 @@ class ProfessorBot:
         except Exception as e:
             raise Exception(f"Failed to generate paper with Claude: {e}")
     
-    def save_paper(self, content: str, topic: str, paper_folder: Path, notes_folder: str, model: str = None) -> Path:
+    def save_paper(self, content: str, topic: str, paper_folder: Path, notes_folder: str, model: str = None, min_rating: int = 30) -> Path:
         """Save generated paper to the paper folder"""
         # Simple filename - just "paper.md" since we're in a topic-specific folder
         filename = "paper.md"
@@ -1587,6 +1647,7 @@ source_notes: "{notes_folder}"
 generated_at: "{datetime.now().isoformat()}"
 model: "{model}"
 generation_method: "professor_bot"
+min_rating_threshold: {min_rating}
 ---
 
 """
@@ -1821,13 +1882,19 @@ def run_grad_bots(weekly_dir, specific_week, output_folder):
 @click.option('--topic', required=True, help='Paper topic/thesis')
 @click.option('--topic-shorthand', help='Short identifier for the topic (used in folder naming if no existing paper folder)')
 @click.option('--paper-folder', help='Path to existing paper folder (if research assistant already created one)')
-def generate_paper_from_notes(notes_folder, topic, topic_shorthand, paper_folder):
+@click.option('--min-rating', default=30, type=int, help='Minimum postdoc rating (0-100) for including weekly notes in paper generation (default: 30)')
+def generate_paper_from_notes(notes_folder, topic, topic_shorthand, paper_folder, min_rating):
     """Generate an academic paper by running research assistant and professor bot in sequence"""
     claude_api_key = os.getenv('CLAUDE_API_KEY')
     
     if not claude_api_key:
         console.print("[red]Error: CLAUDE_API_KEY must be set in environment variables[/red]")
         console.print("[yellow]Add CLAUDE_API_KEY=your-api-key to your .env file[/yellow]")
+        return
+    
+    # Validate min_rating
+    if not 0 <= min_rating <= 100:
+        console.print(f"[red]Error: --min-rating must be between 0 and 100, got {min_rating}[/red]")
         return
     
     with Progress(
@@ -1876,12 +1943,12 @@ def generate_paper_from_notes(notes_folder, topic, topic_shorthand, paper_folder
             professor_bot = ProfessorBot(claude_api_key)
             
             console.print(f"[blue]Running professor bot to generate paper[/blue]")
-            paper_content = professor_bot.generate_paper(notes_folder, target_paper_folder, topic)
+            paper_content = professor_bot.generate_paper(notes_folder, target_paper_folder, topic, min_rating)
             
             progress.update(task2, description="Saving paper...")
             
             # Save the paper
-            output_path = professor_bot.save_paper(paper_content, topic, target_paper_folder, notes_folder)
+            output_path = professor_bot.save_paper(paper_content, topic, target_paper_folder, notes_folder, min_rating=min_rating)
             
             progress.update(task2, description="✓ Professor bot complete")
             
