@@ -105,12 +105,29 @@ uv run main.py researcher-bot --notes-folder "grad_notes/grad_bot_analysis_20251
 - Rating based on evidence support + novelty/interest
 - Suitable for conference submissions (Slayage Conference) or journals
 
+### `reviewer-bot` (Peer Review Papers)
+Acts as a peer reviewer for Buffy Studies conference submissions:
+```bash
+uv run main.py reviewer-bot --paper-folder "papers/20251016_113410_nietzsche"
+```
+- Evaluates paper quality using academic conference standards
+- Provides **ACCEPT** or **REJECT** decision with detailed justification
+- Reviews include:
+  - Overall assessment
+  - Strengths and weaknesses
+  - Detailed comments on argument, evidence, and theoretical framework
+  - Script citation verification
+  - Requested changes (if rejected)
+- Outputs review to `reviews/review_paper_<timestamp>.json` in the paper folder
+
 ## Output Structure
 
 ```
 papers/20251016_113410_nietzsche/
 ├── paper.md                    # Final paper with metadata
 ├── postdoc_ratings.json        # Relevance ratings (0-100)
+├── reviews/                    # Peer reviews (from reviewer-bot, optional)
+│   └── review_paper_20251016_123456.json  # Peer review with decision
 └── scripts/                    # Top N episode scripts (configurable)
     ├── 6x17 Normal Again.txt
     └── 4x22 Restless.txt

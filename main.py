@@ -1837,6 +1837,219 @@ min_rating_threshold: {min_rating}
         return output_path
 
 
+class ReviewerBot:
+    """Peer reviewer bot for evaluating academic papers on Buffy Studies"""
+    
+    def __init__(self, api_key: str):
+        self.client = Anthropic(api_key=api_key)
+    
+    def load_reviewer_prompts(self) -> tuple[str, str]:
+        """Load reviewer system and user prompts from configuration file"""
+        config_path = Path("prompts.toml")
+        if not config_path.exists():
+            raise FileNotFoundError("prompts.toml configuration file not found")
+        
+        config = toml.load(config_path)
+        if 'reviewer_bot' not in config:
+            raise ValueError("Reviewer bot prompt configuration not found in prompts.toml")
+        
+        prompt_config = config['reviewer_bot']
+        system_prompt = prompt_config["system_prompt"]
+        user_prompt = prompt_config["user_prompt"]
+        
+        return system_prompt, user_prompt
+    
+    def load_reviewer_model_config(self) -> str:
+        """Load reviewer model from configuration file"""
+        config_path = Path("prompts.toml")
+        if not config_path.exists():
+            raise FileNotFoundError("prompts.toml configuration file not found")
+        
+        config = toml.load(config_path)
+        if 'models' not in config or 'paper_generation' not in config['models']:
+            # Use paper_generation model as reviewer needs similar capabilities
+            return "claude-sonnet-4-20250514"
+        
+        return config['models']['paper_generation']
+    
+    def load_reviewer_api_settings(self) -> dict:
+        """Load reviewer API settings from configuration file"""
+        config_path = Path("prompts.toml")
+        if not config_path.exists():
+            raise FileNotFoundError("prompts.toml configuration file not found")
+        
+        config = toml.load(config_path)
+        
+        return {
+            'temperature': config['api_settings']['paper_generation_temperature'],
+            'max_tokens': config['api_settings']['paper_generation_max_tokens']
+        }
+    
+    def load_paper(self, paper_folder: str) -> str:
+        """Load the paper content from paper.md"""
+        paper_path = Path(paper_folder)
+        if not paper_path.exists():
+            raise FileNotFoundError(f"Paper folder not found: {paper_folder}")
+        
+        paper_file = paper_path / "paper.md"
+        if not paper_file.exists():
+            raise FileNotFoundError(f"paper.md not found in {paper_folder}")
+        
+        console.print(f"[blue]Loading paper from: {paper_file}[/blue]")
+        
+        with open(paper_file, 'r', encoding='utf-8') as f:
+            content = f.read().strip()
+        
+        return content
+    
+    def load_scripts(self, paper_folder: str) -> str:
+        """Load episode scripts from the paper folder"""
+        paper_path = Path(paper_folder)
+        scripts_dir = paper_path / "scripts"
+        
+        if not scripts_dir.exists():
+            console.print(f"[yellow]No scripts folder found in {paper_folder}[/yellow]")
+            return "No episode scripts provided."
+        
+        script_files = sorted([f for f in scripts_dir.glob("*.txt")])
+        if not script_files:
+            console.print(f"[yellow]No script files found in {scripts_dir}[/yellow]")
+            return "No episode scripts provided."
+        
+        console.print(f"[blue]Loading {len(script_files)} episode scripts[/blue]")
+        
+        # Combine all episode scripts
+        combined_scripts = []
+        combined_scripts.append("=== EPISODE SCRIPTS ===\n")
+        
+        for script_file in script_files:
+            with open(script_file, 'r', encoding='utf-8') as f:
+                content = f.read().strip()
+            
+            episode_name = script_file.stem  # filename without extension
+            combined_scripts.append(f"\n=== EPISODE: {episode_name} ===\n")
+            combined_scripts.append(content)
+            combined_scripts.append("\n" + "="*50 + "\n")
+        
+        combined_scripts.append("\n=== END SCRIPTS ===")
+        return "\n".join(combined_scripts)
+    
+    def review_paper(self, paper_folder: str) -> dict:
+        """Review a paper and return the review data
+        
+        Args:
+            paper_folder: Path to folder containing paper.md and scripts/
+        
+        Returns:
+            Dictionary containing the review
+        """
+        console.print(f"[blue]Loading paper from: {paper_folder}[/blue]")
+        paper_content = self.load_paper(paper_folder)
+        
+        console.print(f"[blue]Loading episode scripts[/blue]")
+        episode_scripts = self.load_scripts(paper_folder)
+        
+        console.print(f"[blue]Loading reviewer prompts[/blue]")
+        system_prompt, user_prompt_template = self.load_reviewer_prompts()
+        
+        console.print(f"[blue]Loading model configuration[/blue]")
+        model = self.load_reviewer_model_config()
+        api_settings = self.load_reviewer_api_settings()
+        
+        # Substitute variables in user prompt
+        user_prompt = user_prompt_template.replace("{{PAPER_CONTENT}}", paper_content)
+        user_prompt = user_prompt.replace("{{EPISODE_SCRIPTS}}", episode_scripts)
+        
+        # Estimate token count for rate limiting (enabled for reviewer bot since it processes full papers)
+        estimated_input_tokens = estimate_token_count(system_prompt + user_prompt)
+        console.print(f"[blue]Estimated input tokens: ~{estimated_input_tokens:,}[/blue]")
+        
+        # Wait for rate limit if necessary (25k tokens/minute)
+        wait_for_rate_limit(estimated_input_tokens, tokens_per_minute_limit=25000, enabled=True)
+        
+        console.print(f"[yellow]Reviewing paper using model: {model}[/yellow]")
+        
+        try:
+            response = self.client.messages.create(
+                model=model,
+                max_tokens=api_settings['max_tokens'],
+                temperature=api_settings['temperature'],
+                system=system_prompt,
+                messages=[
+                    {"role": "user", "content": user_prompt}
+                ]
+            )
+            
+            response_text = response.content[0].text.strip()
+            console.print(f"[green]✓ Review complete[/green]")
+            
+            # Parse the JSON response
+            try:
+                # Try to extract JSON object from the response
+                json_start = response_text.find('{')
+                json_end = response_text.rfind('}') + 1
+                
+                if json_start != -1 and json_end > json_start:
+                    json_text = response_text[json_start:json_end]
+                    review_data = json.loads(json_text)
+                else:
+                    # No braces found, try parsing the whole thing
+                    review_data = json.loads(response_text)
+                
+                if not isinstance(review_data, dict) or 'decision' not in review_data:
+                    raise ValueError("Response does not contain 'decision' key")
+                
+                return review_data
+                
+            except json.JSONDecodeError as e:
+                console.print(f"[red]Error parsing JSON response: {e}[/red]")
+                console.print(f"[red]Raw response: {response_text[:500]}...[/red]")
+                raise Exception(f"Failed to parse review response as JSON: {e}")
+            
+        except Exception as e:
+            raise Exception(f"Failed to review paper with Claude: {e}")
+    
+    def save_review(self, review_data: dict, paper_folder: str) -> Path:
+        """Save review to a JSON file in the paper folder's reviews/ subdirectory
+        
+        Args:
+            review_data: Dictionary containing review
+            paper_folder: Path to paper folder
+        
+        Returns:
+            Path to saved review file
+        """
+        paper_path = Path(paper_folder)
+        
+        # Create reviews subdirectory
+        reviews_dir = paper_path / "reviews"
+        reviews_dir.mkdir(exist_ok=True)
+        
+        # Generate filename with timestamp
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        json_path = reviews_dir / f"review_paper_{timestamp}.json"
+        
+        # Prepare output data with metadata
+        model = self.load_reviewer_model_config()
+        output_data = {
+            "metadata": {
+                "paper_folder": str(paper_folder),
+                "reviewed_at": datetime.now().isoformat(),
+                "model": model,
+                "decision": review_data.get('decision', 'UNKNOWN')
+            },
+            "review": review_data
+        }
+        
+        # Save to JSON file
+        with open(json_path, 'w', encoding='utf-8') as f:
+            json.dump(output_data, f, indent=2, ensure_ascii=False)
+        
+        console.print(f"[green]✓ Review saved to: {json_path}[/green]")
+        
+        return json_path
+
+
 class ResearcherBot:
     """Researcher bot for generating paper abstracts/proposals based on grad notes"""
     
@@ -2757,6 +2970,90 @@ def researcher_bot(notes_folder):
             console.print(f"[dim]{'-'*80}[/dim]\n")
         
         console.print(f"[green]✓ All abstracts saved to: {output_path}[/green]")
+        
+    except Exception as e:
+        console.print(f"[red]Error: {e}[/red]")
+
+
+@cli.command()
+@click.option('--paper-folder', required=True, help='Path to paper folder containing paper.md and scripts/ (e.g., papers/20251016_113410_nietzsche)')
+def reviewer_bot(paper_folder):
+    """Review an academic paper for a Buffy Studies conference
+    
+    This bot acts as a peer reviewer, evaluating the paper and providing either an ACCEPT or REJECT
+    decision with detailed feedback. The review includes strengths, weaknesses, and if rejected,
+    specific requests for changes."""
+    claude_api_key = os.getenv('CLAUDE_API_KEY')
+    
+    if not claude_api_key:
+        console.print("[red]Error: CLAUDE_API_KEY must be set in environment variables[/red]")
+        console.print("[yellow]Add CLAUDE_API_KEY=your-api-key to your .env file[/yellow]")
+        return
+    
+    reviewer_bot_instance = ReviewerBot(claude_api_key)
+    
+    try:
+        console.print(f"[blue]Starting peer review...[/blue]")
+        console.print(f"[blue]Paper folder: {paper_folder}[/blue]\n")
+        
+        # Review the paper
+        review_data = reviewer_bot_instance.review_paper(paper_folder)
+        
+        # Save review to JSON
+        output_path = reviewer_bot_instance.save_review(review_data, paper_folder)
+        
+        # Display review
+        decision = review_data.get('decision', 'UNKNOWN')
+        decision_color = 'green' if decision == 'ACCEPT' else 'red'
+        
+        console.print(f"\n[{decision_color}]{'='*80}[/{decision_color}]")
+        console.print(f"[{decision_color}]PEER REVIEW DECISION: {decision}[/{decision_color}]")
+        console.print(f"[{decision_color}]{'='*80}[/{decision_color}]\n")
+        
+        # Overall assessment
+        overall = review_data.get('overall_assessment', 'No assessment provided')
+        console.print(f"[bold]Overall Assessment:[/bold]")
+        console.print(f"{overall}\n")
+        
+        # Strengths
+        strengths = review_data.get('strengths', [])
+        if strengths:
+            console.print(f"[green]Strengths:[/green]")
+            for i, strength in enumerate(strengths, 1):
+                console.print(f"[green]  {i}. {strength}[/green]")
+            console.print()
+        
+        # Weaknesses
+        weaknesses = review_data.get('weaknesses', [])
+        if weaknesses:
+            console.print(f"[yellow]Weaknesses:[/yellow]")
+            for i, weakness in enumerate(weaknesses, 1):
+                console.print(f"[yellow]  {i}. {weakness}[/yellow]")
+            console.print()
+        
+        # Detailed comments
+        detailed = review_data.get('detailed_comments', '')
+        if detailed:
+            console.print(f"[bold]Detailed Comments:[/bold]")
+            console.print(f"{detailed}\n")
+        
+        # Script verification
+        script_verification = review_data.get('script_verification', '')
+        if script_verification:
+            console.print(f"[bold]Script Citations:[/bold]")
+            console.print(f"{script_verification}\n")
+        
+        # Requested changes (if rejected)
+        if decision == 'REJECT':
+            requested_changes = review_data.get('requested_changes', [])
+            if requested_changes:
+                console.print(f"[red]Requested Changes:[/red]")
+                for i, change in enumerate(requested_changes, 1):
+                    console.print(f"[red]  {i}. {change}[/red]")
+                console.print()
+        
+        console.print(f"[blue]{'='*80}[/blue]")
+        console.print(f"[green]✓ Full review saved to: {output_path}[/green]")
         
     except Exception as e:
         console.print(f"[red]Error: {e}[/red]")
