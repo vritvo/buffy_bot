@@ -1867,7 +1867,7 @@ class ProfessorBot:
     
     def rewrite_paper(self, original_paper_folder: Path, notes_folder: str, topic: str, 
                       min_rating: int = 30, verbatim_chat_threshold: int = 70, 
-                      weekly_conversations_folder: str = None) -> tuple[str, Path]:
+                      weekly_conversations_folder: str = None) -> tuple[str, Path, int]:
         """Rewrite a paper based on peer review feedback
         
         Args:
@@ -1879,16 +1879,39 @@ class ProfessorBot:
             weekly_conversations_folder: Path to weekly conversations for verbatim transcripts
         
         Returns:
-            Tuple of (paper_content, new_paper_folder)
+            Tuple of (paper_content, new_paper_folder, version)
         """
-        # Load the original paper
+        # Load the original paper to extract version number
         original_paper_file = original_paper_folder / "paper.md"
         if not original_paper_file.exists():
-            raise FileNotFoundError(f"paper.md not found in {original_paper_folder}")
+            # Try to find any paper file with version suffix
+            paper_files = list(original_paper_folder.glob("paper*.md"))
+            if paper_files:
+                original_paper_file = paper_files[0]
+            else:
+                raise FileNotFoundError(f"No paper.md file found in {original_paper_folder}")
         
         console.print(f"[blue]Loading original paper from: {original_paper_file}[/blue]")
         with open(original_paper_file, 'r', encoding='utf-8') as f:
             original_paper = f.read()
+        
+        # Extract current version from metadata
+        current_version = 0
+        if '---' in original_paper:
+            parts = original_paper.split('---', 2)
+            if len(parts) >= 2:
+                frontmatter = parts[1]
+                for line in frontmatter.split('\n'):
+                    if line.startswith('version:'):
+                        try:
+                            current_version = int(line.split('version:', 1)[1].strip())
+                        except ValueError:
+                            pass
+                        break
+        
+        # Increment version for rewrite
+        new_version = current_version + 1
+        console.print(f"[blue]Current version: {current_version}, New version: {new_version}[/blue]")
         
         # Load reviews
         console.print(f"[blue]Loading peer reviews[/blue]")
@@ -1994,15 +2017,34 @@ The rewritten paper should:
                 shutil.copy2(original_ratings, new_ratings)
                 console.print(f"[blue]Copied postdoc ratings to new folder[/blue]")
             
-            return paper_content, new_paper_folder
+            return paper_content, new_paper_folder, new_version
             
         except Exception as e:
             raise Exception(f"Failed to rewrite paper with Claude: {e}")
     
-    def save_paper(self, content: str, topic: str, paper_folder: Path, notes_folder: str, model: str = None, min_rating: int = 30, is_rewrite: bool = False, original_folder: str = None) -> Path:
-        """Save generated paper to the paper folder"""
-        # Simple filename - just "paper.md" since we're in a topic-specific folder
-        filename = "paper.md"
+    def save_paper(self, content: str, topic: str, paper_folder: Path, notes_folder: str, model: str = None, min_rating: int = 30, is_rewrite: bool = False, original_folder: str = None, version: int = None) -> Path:
+        """Save generated paper to the paper folder
+        
+        Args:
+            version: Version number for rewritten papers (1, 2, 3, etc.). If provided with is_rewrite=True,
+                     uses a chaotic academic filename pattern like _copy1, _final2, _FINAL3, _(4)
+        """
+        import random
+        
+        # Determine filename - use chaotic academic patterns for rewrites
+        if is_rewrite and version is not None and version > 0:
+            # Choose a random suffix pattern for academic chaos
+            suffix_patterns = [
+                f"_copy{version}",
+                f"_final{version}",
+                f"_FINAL{version}",
+                f"_({version})"
+            ]
+            suffix = random.choice(suffix_patterns)
+            filename = f"paper{suffix}.md"
+        else:
+            filename = "paper.md"
+        
         output_path = paper_folder / filename
         
         # Get model for metadata if not provided
@@ -2016,6 +2058,10 @@ generated_at: "{datetime.now().isoformat()}"
 model: "{model}"
 generation_method: "{"rewrite_from_reviews" if is_rewrite else "professor_bot"}"
 min_rating_threshold: {min_rating}"""
+        
+        # Always include version in metadata (0 for initial papers, incremented for rewrites)
+        paper_version = version if version is not None else 0
+        metadata += f'\nversion: {paper_version}'
         
         if is_rewrite and original_folder:
             metadata += f'\noriginal_paper: "{original_folder}"'
@@ -2770,7 +2816,7 @@ def _rewrite_paper_from_reviews(
         
         # Rewrite the paper
         console.print(f"[yellow]Starting rewrite process...[/yellow]")
-        paper_content, new_paper_folder = professor_bot.rewrite_paper(
+        paper_content, new_paper_folder, version = professor_bot.rewrite_paper(
             original_paper_folder=original_folder_path,
             notes_folder=notes_folder,
             topic=topic,
@@ -2779,8 +2825,8 @@ def _rewrite_paper_from_reviews(
             weekly_conversations_folder=weekly_conversations
         )
         
-        # Save the rewritten paper
-        console.print(f"[blue]Saving rewritten paper...[/blue]")
+        # Save the rewritten paper with chaotic academic filename
+        console.print(f"[blue]Saving rewritten paper (version {version})...[/blue]")
         output_path = professor_bot.save_paper(
             content=paper_content,
             topic=topic,
@@ -2788,7 +2834,8 @@ def _rewrite_paper_from_reviews(
             notes_folder=notes_folder,
             min_rating=min_rating,
             is_rewrite=True,
-            original_folder=str(original_folder_path)
+            original_folder=str(original_folder_path),
+            version=version
         )
         
         console.print(f"\n[green]{'='*80}[/green]")
