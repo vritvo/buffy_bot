@@ -10,6 +10,8 @@ Extracts Buffy the Vampire Slayer discussions from Zulip and generates academic 
    - Runs **postdoc bot** to rate notes for relevance (0-100)
    - Runs **research assistant** to select relevant episodes
    - Runs **professor bot** to write the paper using filtered notes and scripts
+4. **Review** - peer review papers with **reviewer bot** (ACCEPT/REJECT + feedback)
+5. **Rewrite** - use `generate-paper --rewrite-paper` to improve papers based on reviews
 
 **Optional: Batch Paper Generation**
 - Run **researcher bot** to generate 5-8 paper abstracts/topics
@@ -58,7 +60,7 @@ uv run main.py generate-paper \
 ## Key Options
 
 ### `generate-paper` (Main Command)
-- `--topic`: Paper topic (required unless using `--from-abstracts`)
+- `--topic`: Paper topic (required unless using `--from-abstracts` or `--rewrite-paper`)
 - `--notes-folder`: Grad notes folder (default: most recent)
 - `--min-rating`: Min rating to include notes (default: 30)
 - `--max-scripts`: Number of episode scripts to include (default: 5)
@@ -67,6 +69,7 @@ uv run main.py generate-paper \
 - `--topic-shorthand`: Short identifier for folder naming
 - `--from-abstracts`: Generate papers for all abstracts from `researcher-bot`
 - `--min-abstract-rating`: Min abstract rating to generate papers for (default: 0, only with `--from-abstracts`)
+- `--rewrite-paper`: Path to existing paper folder to rewrite based on reviews
 
 **Batch Generation from Researcher Bot:**
 ```bash
@@ -78,6 +81,19 @@ uv run main.py generate-paper --from-abstracts --min-abstract-rating 70
 ```
 
 When using `--from-abstracts`, the command reads `paper_abstracts.json` from the grad notes folder and generates a complete paper for each abstract (or each abstract above the rating threshold). Each paper gets its own folder in `papers/`.
+
+**Rewrite Based on Reviews:**
+```bash
+# Rewrite a paper based on peer review feedback
+uv run main.py generate-paper --rewrite-paper "papers/20251016_113410_nietzsche"
+```
+
+When using `--rewrite-paper`, the professor bot:
+- Loads the original paper and all reviews from the `reviews/` folder
+- Rewrites the paper addressing ALL reviewer feedback
+- Creates a new sibling folder with `_v2` suffix
+- Copies scripts and postdoc ratings to the new folder
+- Does NOT copy the old reviews (ready for fresh peer review)
 
 **Note:** Weeks with ratings ≥ `--verbatim-chat-threshold` will use the original verbatim conversation transcript instead of summarized grad notes for higher fidelity.
 
