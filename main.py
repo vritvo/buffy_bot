@@ -2045,11 +2045,21 @@ The rewritten paper should:
         Args:
             version: Version number for rewritten papers (1, 2, 3, etc.). If provided with is_rewrite=True,
                      uses a chaotic academic filename pattern like _copy1, _final2, _FINAL3, _(4)
+            original_folder: Path to original paper folder (for rewrites, to get previous filename)
         """
         import random
         
         # Determine filename - use chaotic academic patterns for rewrites
         if is_rewrite and version is not None and version > 0:
+            # Get the previous paper's filename to build upon it
+            previous_base = "paper"
+            if original_folder:
+                original_path = Path(original_folder)
+                original_papers = list(original_path.glob("paper*.md"))
+                if original_papers:
+                    # Extract the base (without .md extension) from previous version
+                    previous_base = original_papers[0].stem
+            
             # Choose a random suffix pattern for academic chaos
             suffix_patterns = [
                 f"_copy{version}",
@@ -2058,7 +2068,8 @@ The rewritten paper should:
                 f"_({version})"
             ]
             suffix = random.choice(suffix_patterns)
-            filename_base = f"paper{suffix}"
+            # Build on previous filename instead of always starting with "paper"
+            filename_base = f"{previous_base}{suffix}"
         else:
             filename_base = "paper"
         
