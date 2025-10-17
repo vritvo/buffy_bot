@@ -2234,11 +2234,13 @@ fontsize: 12pt
         except Exception as e:
             console.print(f"[yellow]Warning: Unexpected error during PDF generation: {e}[/yellow]")
     
-    def _extract_paper_content(self, content: str) -> str:
+    def _extract_paper_content(self, content: str, remove_title: bool = True) -> str:
         """Extract clean paper content, removing scratchpad and XML tags
         
         Args:
             content: Raw paper content from LLM
+            remove_title: If True, removes the first # level-1 heading (for PDF generation 
+                         where title comes from YAML frontmatter)
             
         Returns:
             Clean paper content suitable for PDF
@@ -2260,6 +2262,13 @@ fontsize: 12pt
         content = re.sub(r'</body>', '', content, flags=re.IGNORECASE)
         content = re.sub(r'<conclusion>', '# Conclusion\n\n', content, flags=re.IGNORECASE)
         content = re.sub(r'</conclusion>', '', content, flags=re.IGNORECASE)
+        
+        # Remove the first # level-1 heading if requested (for PDF generation)
+        # This avoids duplicate titles when pandoc renders from YAML frontmatter
+        if remove_title:
+            # Match the first level-1 heading (# Title) at the start of content
+            # Only match level-1 (single #), not level-2 or higher
+            content = re.sub(r'^#\s+[^\n]+\n+', '', content, count=1, flags=re.MULTILINE)
         
         # Clean up any extra whitespace
         content = re.sub(r'\n{3,}', '\n\n', content)
