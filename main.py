@@ -2140,7 +2140,7 @@ fontsize: 12pt
             ]
             
             pdf_generated = False
-            last_error = None
+            engine_errors = []  # Track all errors
             
             for engine, extra_args in pdf_engines:
                 try:
@@ -2152,27 +2152,57 @@ fontsize: 12pt
                     console.print(f"[green]✓ PDF generated using {engine}: {pdf_path}[/green]")
                     pdf_generated = True
                     break
-                except (subprocess.CalledProcessError, FileNotFoundError) as e:
-                    last_error = e
+                except subprocess.CalledProcessError as e:
+                    engine_errors.append((engine, 'error', e.stderr))
+                    continue
+                except FileNotFoundError as e:
+                    engine_errors.append((engine, 'not_found', str(e)))
                     continue
             
             if not pdf_generated:
-                # Fall back to HTML output if no PDF engine works
-                html_path = paper_folder / f"{filename_base}.html"
-                try:
-                    subprocess.run([
-                        'pandoc',
-                        str(pdf_md_path),
-                        '-o', str(html_path),
-                        '--standalone',
-                        '--self-contained'
-                    ], check=True, capture_output=True, text=True)
-                    console.print(f"[yellow]Note: PDF engines not available, generated HTML instead: {html_path}[/yellow]")
-                    pdf_generated = True
-                except subprocess.CalledProcessError:
-                    console.print(f"[yellow]Warning: Could not generate PDF or HTML[/yellow]")
-                    if hasattr(last_error, 'stderr'):
-                        console.print(f"[dim]Last error: {last_error.stderr}[/dim]")
+                # Show detailed error information for all engines
+                console.print(f"[yellow]Warning: Could not generate PDF with any engine[/yellow]")
+                
+                # Show error for pdflatex specifically (most important one)
+                pdflatex_error = next((err for err in engine_errors if err[0] == 'pdflatex'), None)
+                if pdflatex_error:
+                    _, error_type, error_msg = pdflatex_error
+                    if error_type == 'error':
+                        console.print(f"\n[red]pdflatex error:[/red]")
+                        error_preview = error_msg[:500] if len(error_msg) > 500 else error_msg
+                        console.print(f"[dim]{error_preview}[/dim]")
+                    else:
+                        console.print(f"\n[yellow]pdflatex not found[/yellow]")
+                
+                # Show summary of all engines tried
+                console.print(f"\n[dim]All engines tried:[/dim]")
+                for engine, error_type, _ in engine_errors:
+                    status = "not installed" if error_type == 'not_found' else "failed"
+                    console.print(f"[dim]  - {engine}: {status}[/dim]")
+                
+                # Only fall back to HTML if pdflatex is truly not available
+                # Check if pdflatex was not found (vs just failed)
+                pdflatex_not_found = pdflatex_error and pdflatex_error[1] == 'not_found'
+                if pdflatex_not_found:
+                    html_path = paper_folder / f"{filename_base}.html"
+                    try:
+                        subprocess.run([
+                            'pandoc',
+                            str(pdf_md_path),
+                            '-o', str(html_path),
+                            '--standalone',
+                            '--self-contained'
+                        ], check=True, capture_output=True, text=True)
+                        console.print(f"[yellow]Note: No PDF engines available, generated HTML instead: {html_path}[/yellow]")
+                        pdf_generated = True
+                    except subprocess.CalledProcessError as e:
+                        console.print(f"[red]Error: Could not generate PDF or HTML[/red]")
+                        if e.stderr:
+                            console.print(f"[dim]HTML generation error: {e.stderr[:200]}[/dim]")
+                else:
+                    # PDF engine exists but failed - this is an error we should surface
+                    console.print(f"[red]Error: PDF generation failed despite having PDF engines installed[/red]")
+                    console.print(f"[yellow]This may be a temporary issue. The markdown file is still saved.[/yellow]")
             
             # Clean up the intermediate markdown file
             if pdf_md_path.exists():
@@ -3880,6 +3910,78 @@ def run_conference(notes_folder, min_abstract_rating, num_reviews, max_revision_
             console.print(f"[red]  ✗ {paper['title']}[/red]")
             reason = paper.get('reason', paper.get('error', 'unknown'))
             console.print(f"[dim]    Reason: {reason}[/dim]")
+
+
+@cli.command()
+@click.option('--paper-folder', required=True, help='Path to paper folder containing paper*.md file (e.g., papers/20251016_113410_nietzsche)')
+def generate_pdf(paper_folder):
+    """Generate PDF from an existing markdown paper file without LLM interaction
+    
+    This command is useful for:
+    - Testing PDF generation
+    - Regenerating PDFs after fixing issues
+    - Creating PDFs for papers that were generated before PDF support was added
+    """
+    claude_api_key = os.getenv('CLAUDE_API_KEY')
+    
+    if not claude_api_key:
+        console.print("[red]Error: CLAUDE_API_KEY must be set in environment variables[/red]")
+        console.print("[yellow]Add CLAUDE_API_KEY=your-api-key to your .env file[/yellow]")
+        return
+    
+    paper_path = Path(paper_folder)
+    if not paper_path.exists():
+        console.print(f"[red]Error: Paper folder not found: {paper_folder}[/red]")
+        return
+    
+    # Find paper file
+    paper_files = list(paper_path.glob("paper*.md"))
+    if not paper_files:
+        console.print(f"[red]Error: No paper file (paper*.md) found in {paper_folder}[/red]")
+        return
+    
+    if len(paper_files) > 1:
+        console.print(f"[yellow]Warning: Multiple paper files found, using first one[/yellow]")
+    
+    paper_file = paper_files[0]
+    console.print(f"[blue]Found paper file: {paper_file}[/blue]")
+    
+    # Read the paper content
+    with open(paper_file, 'r', encoding='utf-8') as f:
+        full_content = f.read()
+    
+    # Extract title from YAML frontmatter
+    title = "Untitled Paper"
+    if '---' in full_content:
+        parts = full_content.split('---', 2)
+        if len(parts) >= 2:
+            frontmatter = parts[1]
+            for line in frontmatter.split('\n'):
+                if line.startswith('title:'):
+                    title = line.split('title:', 1)[1].strip().strip('"')
+                    break
+    
+    # Extract paper content (after frontmatter)
+    paper_content = full_content
+    if '---' in full_content:
+        parts = full_content.split('---', 2)
+        if len(parts) >= 3:
+            paper_content = parts[2].strip()
+    
+    console.print(f"[blue]Paper title: {title}[/blue]")
+    console.print(f"[blue]Generating PDF...[/blue]")
+    
+    # Use ProfessorBot's PDF generation method
+    professor_bot = ProfessorBot(claude_api_key)
+    
+    # Determine filename base (e.g., "paper" or "paper_final2")
+    filename_base = paper_file.stem  # Gets filename without extension
+    
+    try:
+        professor_bot._generate_pdf(paper_content, title, paper_path, filename_base)
+        console.print(f"[green]✓ PDF generation complete![/green]")
+    except Exception as e:
+        console.print(f"[red]Error generating PDF: {e}[/red]")
 
 
 @cli.command()
