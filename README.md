@@ -4,18 +4,45 @@ Extracts Buffy the Vampire Slayer discussions from Zulip and generates academic 
 
 ## How It Works
 
-1. **Extract** conversations from Zulip, split into weekly chunks
-2. **Grad bots** analyze each week, extracting relevant Buffy content and quotes
-3. **Generate paper** - single command that automatically:
-   - Runs **postdoc bot** to rate notes for relevance (0-100)
-   - Runs **research assistant** to select relevant episodes
-   - Runs **professor bot** to write the paper using filtered notes and scripts
-4. **Review** - peer review papers with **reviewer bot** (ACCEPT/REJECT + feedback)
-5. **Rewrite** - use `generate-paper --rewrite-paper` to improve papers based on reviews
+### Run a Conference (Fully Automated)
 
-**Optional: Batch Paper Generation**
-- Run **researcher bot** to generate 5-8 paper abstracts/topics
-- Use `generate-paper --from-abstracts` to automatically generate papers for all abstracts
+Removes humans from the equation - just provide a Zulip conversation and let the bots do everything:
+
+```bash
+# 1. Extract conversations
+uv run main.py extract-private --limit 10000 --weekly-chunks
+
+# 2. Analyze with grad bots
+uv run main.py run-grad-bots --weekly-dir "conversations/weekly"
+
+# 3. Generate paper abstracts (5-8 philosophically-driven topics)
+uv run main.py researcher-bot
+
+# 4. Run the full conference (generates papers, reviews, revisions until acceptance)
+uv run main.py run-conference
+```
+
+The `run-conference` command fully automates the academic lifecycle:
+- Generates papers for all abstracts from `researcher-bot`
+- Reviews each paper with multiple peer reviewers
+- Rewrites papers based on feedback (with chaotic academic filenames)
+- Continues revision cycles until all reviews are ACCEPT
+- Acceptance bias increases with longer filenames (simulating academic reality)
+
+### Generate a Paper with a Given Abstract
+
+If you have a specific paper topic in mind:
+
+```bash
+# 1. Extract and analyze (steps 1-2 above)
+# 2. Generate paper (auto-runs postdoc bot + research assistant + professor bot)
+uv run main.py generate-paper --topic "Your paper topic"
+```
+
+The `generate-paper` command automatically:
+- Runs **postdoc bot** to rate notes for relevance (0-100)
+- Runs **research assistant** to select relevant episodes
+- Runs **professor bot** to write the paper using filtered notes and scripts
 
 ## Setup
 
@@ -31,130 +58,81 @@ CLAUDE_API_KEY=your-claude-api-key
 
 ## Usage
 
-### Multi-Agent Workflow
-
-```bash
-# 1. Extract conversations
-uv run main.py extract-private --limit 10000 --weekly-chunks
-
-# 2. Analyze with grad bots
-uv run main.py run-grad-bots --weekly-dir "conversations/weekly"
-
-# 3. Generate paper (auto-runs postdoc bot + research assistant + professor bot)
-uv run main.py generate-paper --topic "Your paper topic"
-```
-
-The `generate-paper` command automatically:
-- Uses the most recent grad notes folder (or specify with `--notes-folder`)
-- Runs **postdoc bot** to rate each week's notes for relevance
-- Runs **research assistant** to select and copy relevant episode scripts
-- Runs **professor bot** to write the final paper
-
-**To use a specific grad notes folder:**
-```bash
-uv run main.py generate-paper \
-  --notes-folder "grad_notes/grad_bot_analysis_20251013_144539" \
-  --topic "Your paper topic"
-```
+See "How It Works" section above for the main workflows. All commands use the most recent grad notes folder by default, or you can specify with `--notes-folder`.
 
 ## Key Options
 
-### `generate-paper` (Main Command)
-- `--topic`: Paper topic (required unless using `--from-abstracts` or `--rewrite-paper`)
+### `run-conference`
+Fully automated conference simulation with paper generation, review, and revision cycles:
 - `--notes-folder`: Grad notes folder (default: most recent)
-- `--min-rating`: Min rating to include notes (default: 30)
-- `--max-scripts`: Number of episode scripts to include (default: 5)
+- `--min-abstract-rating`: Min abstract rating to include (default: 0)
+- `--num-reviews`: Reviewers per round (default: 3)
+- `--max-revision-rounds`: Max revision attempts before giving up (default: 10)
+- `--min-rating`: Min postdoc rating to include notes (default: 30)
+- `--max-scripts`: Episode scripts to include (default: 5)
 - `--verbatim-chat-threshold`: Rating for using verbatim transcripts (default: 70)
-- `--weekly-conversations`: Path to weekly conversations folder (default: conversations/weekly)
-- `--topic-shorthand`: Short identifier for folder naming
-- `--from-abstracts`: Generate papers for all abstracts from `researcher-bot`
-- `--min-abstract-rating`: Min abstract rating to generate papers for (default: 0, only with `--from-abstracts`)
-- `--rewrite-paper`: Path to existing paper folder to rewrite based on reviews
 
-**Batch Generation from Researcher Bot:**
+### `researcher-bot`
+Generates 5-8 philosophically-driven paper abstracts with ratings (0-100) based on evidence support and novelty:
 ```bash
-# Generate papers for ALL abstracts
+uv run main.py researcher-bot
+```
+- Outputs `paper_abstracts.json` in the grad notes folder
+- Required before running `run-conference` or `generate-paper --from-abstracts`
+
+### `generate-paper`
+Generate a single paper or batch generate from abstracts:
+```bash
+# Single paper with specific topic
+uv run main.py generate-paper --topic "Your paper topic"
+
+# Batch generate from all abstracts
 uv run main.py generate-paper --from-abstracts
 
-# Generate papers only for abstracts rated 70+
+# Batch generate from highly-rated abstracts only
 uv run main.py generate-paper --from-abstracts --min-abstract-rating 70
-```
 
-When using `--from-abstracts`, the command reads `paper_abstracts.json` from the grad notes folder and generates a complete paper for each abstract (or each abstract above the rating threshold). Each paper gets its own folder in `papers/`.
-
-**Rewrite Based on Reviews:**
-```bash
-# Rewrite a paper based on peer review feedback
+# Rewrite based on peer reviews
 uv run main.py generate-paper --rewrite-paper "papers/20251016_113410_nietzsche"
 ```
 
-When using `--rewrite-paper`, the professor bot:
-- Loads the original paper and all reviews from the `reviews/` folder
-- Rewrites the paper addressing ALL reviewer feedback
-- Creates a new sibling folder with `_v2` suffix
-- Copies scripts and postdoc ratings to the new folder
-- Does NOT copy the old reviews (ready for fresh peer review)
+Key options:
+- `--topic`: Paper topic (required unless using `--from-abstracts` or `--rewrite-paper`)
+- `--from-abstracts`: Generate papers for all abstracts from `researcher-bot`
+- `--min-abstract-rating`: Min abstract rating for batch generation (default: 0)
+- `--rewrite-paper`: Path to existing paper folder to rewrite based on reviews
+- `--min-rating`: Min postdoc rating to include notes (default: 30)
+- `--max-scripts`: Episode scripts to include (default: 5)
+- `--verbatim-chat-threshold`: Rating for using verbatim transcripts (default: 70)
 
-**Note:** Weeks with ratings ≥ `--verbatim-chat-threshold` will use the original verbatim conversation transcript instead of summarized grad notes for higher fidelity.
-
-### `postdoc-bot` (Optional Standalone)
-Usually runs automatically during paper generation. Use standalone only if needed:
-- `--topic`: Paper topic (required)
-- `--notes-folder`: Grad notes folder (default: most recent)
-- `--paper-folder`: Where to save ratings (default: notes folder)
-
-### `research-assistant` (Optional Standalone)
-Usually runs automatically during paper generation. Use standalone to preview episodes:
-- `--topic`: Paper topic (required)
-- `--notes-folder`: Grad notes folder (default: most recent)
-- `--max-scripts`: Number of scripts to copy (default: 5)
-
-### `researcher-bot` (Generate Paper Ideas)
-Analyzes all grad notes and generates 5-8 philosophically-driven paper abstracts with ratings:
-```bash
-uv run main.py researcher-bot
-# or specify folder:
-uv run main.py researcher-bot --notes-folder "grad_notes/grad_bot_analysis_20251013_144539"
-```
-- Outputs `paper_abstracts.json` in the grad notes folder
-- Each abstract includes title, 150-250 word abstract, key episodes, philosophical frameworks, and rating (0-100)
-- Rating based on evidence support + novelty/interest
-- Suitable for conference submissions (Slayage Conference) or journals
-
-### `reviewer-bot` (Peer Review Papers)
-Acts as multiple independent peer reviewers for Buffy Studies conference submissions:
-```bash
-# Generate 3 independent reviews (default)
-uv run main.py reviewer-bot --paper-folder "papers/20251016_113410_nietzsche"
-
-# Generate 5 independent reviews
-uv run main.py reviewer-bot --paper-folder "papers/20251016_113410_nietzsche" --num-reviews 5
-```
-- **Generates multiple independent reviews** (default: 3) with separate API calls
-- Each review evaluates paper quality using academic conference standards
-- Provides **ACCEPT** or **REJECT** decision with detailed justification
-- Each review includes:
-  - Overall assessment
-  - Strengths and weaknesses
-  - Detailed comments on argument, evidence, and theoretical framework
-  - Script citation verification
-  - Requested changes (if rejected)
-- Displays summary showing ACCEPT/REJECT count across all reviewers
-- Outputs multiple review files: `reviews/review_paper_<timestamp>_reviewer1.json`, `reviewer2.json`, etc.
+**Note:** Weeks with ratings ≥ `--verbatim-chat-threshold` use the original verbatim conversation transcript instead of summarized grad notes.
 
 ## Output Structure
 
 ```
 papers/20251016_113410_nietzsche/
-├── paper.md                    # Final paper with metadata
+├── paper.md                    # Initial paper with metadata
+├── paper.pdf                   # PDF version of the paper
 ├── postdoc_ratings.json        # Relevance ratings (0-100)
-├── reviews/                    # Peer reviews (from reviewer-bot, optional)
-│   ├── review_paper_20251016_123456_reviewer1.json  # Review from reviewer 1
-│   ├── review_paper_20251016_123456_reviewer2.json  # Review from reviewer 2
-│   └── review_paper_20251016_123456_reviewer3.json  # Review from reviewer 3
+├── reviews/                    # Peer reviews (from reviewer-bot)
+│   ├── review_paper_20251016_123456_reviewer1.json
+│   ├── review_paper_20251016_123456_reviewer2.json
+│   └── review_paper_20251016_123456_reviewer3.json
 └── scripts/                    # Top N episode scripts (configurable)
     ├── 6x17 Normal Again.txt
     └── 4x22 Restless.txt
+
+papers/20251016_113520_nietzsche_v2/
+├── paper_copy1.md              # Rewritten paper (chaotic academic filename)
+├── paper_copy1.pdf             # PDF version
+├── postdoc_ratings.json        # Copied from original
+├── reviews/                    # New reviews for this version
+└── scripts/                    # Copied from original
+
+papers/20251016_113625_nietzsche_v2_v2/
+├── paper_copy1_FINAL2.md       # Filenames accumulate suffixes!
+├── paper_copy1_FINAL2.pdf      # Longer names = higher acceptance bias
+└── ...
 
 grad_notes/grad_bot_analysis_20251013_144539/
 ├── 2025-07-20.md              # Weekly analysis
