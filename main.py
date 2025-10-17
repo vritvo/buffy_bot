@@ -1702,24 +1702,24 @@ class ProfessorBot:
                 console.print(f"[green]Including {note_file.name} (rating: {rating if rating else 'N/A'}/100)[/green]")
                 
                 # Load and process the note
-                with open(note_file, 'r', encoding='utf-8') as f:
-                    content = f.read().strip()
-                
-                # Extract just the content after the metadata header
-                if "---" in content:
-                    # Split on the second occurrence of "---" to skip the metadata
-                    parts = content.split("---", 2)
-                    if len(parts) >= 3:
-                        main_content = parts[2].strip()
-                    else:
-                        main_content = content
+            with open(note_file, 'r', encoding='utf-8') as f:
+                content = f.read().strip()
+            
+            # Extract just the content after the metadata header
+            if "---" in content:
+                # Split on the second occurrence of "---" to skip the metadata
+                parts = content.split("---", 2)
+                if len(parts) >= 3:
+                    main_content = parts[2].strip()
                 else:
                     main_content = content
-                
-                combined_content.append(f"\n=== WEEK: {note_file.stem} ===\n")
-                combined_content.append(main_content)
-                combined_content.append("\n" + "="*50 + "\n")
-                included_count += 1
+            else:
+                main_content = content
+            
+            combined_content.append(f"\n=== WEEK: {note_file.stem} ===\n")
+            combined_content.append(main_content)
+            combined_content.append("\n" + "="*50 + "\n")
+            included_count += 1
         
         combined_content.append("\n=== END FILTERED NOTES ===")
         
@@ -2107,6 +2107,16 @@ min_rating_threshold: {min_rating}"""
         """
         import subprocess
         
+        # Ensure TeX binaries are in PATH for macOS (common TeX installation location)
+        env = os.environ.copy()
+        tex_paths = ['/Library/TeX/texbin', '/usr/local/texlive/bin', '/opt/homebrew/bin']
+        current_path = env.get('PATH', '')
+        
+        # Add TeX paths if they exist and aren't already in PATH
+        for tex_path in tex_paths:
+            if os.path.exists(tex_path) and tex_path not in current_path:
+                env['PATH'] = f"{tex_path}:{env['PATH']}"
+        
         # Extract just the academic paper content (remove scratchpad)
         clean_content = self._extract_paper_content(content)
         
@@ -2148,7 +2158,7 @@ fontsize: 12pt
                     args.extend(['--pdf-engine', engine])
                     args.extend(extra_args)
                     
-                    subprocess.run(args, check=True, capture_output=True, text=True)
+                    subprocess.run(args, check=True, capture_output=True, text=True, env=env)
                     console.print(f"[green]✓ PDF generated using {engine}: {pdf_path}[/green]")
                     pdf_generated = True
                     break
@@ -2192,7 +2202,7 @@ fontsize: 12pt
                             '-o', str(html_path),
                             '--standalone',
                             '--self-contained'
-                        ], check=True, capture_output=True, text=True)
+                        ], check=True, capture_output=True, text=True, env=env)
                         console.print(f"[yellow]Note: No PDF engines available, generated HTML instead: {html_path}[/yellow]")
                         pdf_generated = True
                     except subprocess.CalledProcessError as e:
