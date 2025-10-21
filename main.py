@@ -1586,7 +1586,8 @@ class ProfessorBot:
         
         return {
             'temperature': config['api_settings']['paper_generation_temperature'],
-            'max_tokens': config['api_settings']['paper_generation_max_tokens']
+            'max_tokens': config['api_settings']['paper_generation_max_tokens'],
+            'max_weeks_for_paper': config['api_settings'].get('max_weeks_for_paper', 8)  # Default to 8 if not set
         }
     
     def load_grad_notes(self, notes_folder: str, min_rating: int = 30, paper_folder: Path = None, 
@@ -1638,13 +1639,12 @@ class ProfessorBot:
             console.print(f"[yellow]Warning: No postdoc_ratings.json found[/yellow]")
             console.print(f"[yellow]All notes will be included. Postdoc bot will run automatically during paper generation.[/yellow]")
         
-        # Filter and combine notes
-        combined_content = []
-        combined_content.append("=== FILTERED CONVERSATION NOTES ===\n")
+        # Load max_weeks setting from config
+        api_settings = self.load_professor_api_settings()
+        max_weeks = api_settings['max_weeks_for_paper']
         
-        included_count = 0
-        excluded_count = 0
-        verbatim_count = 0
+        # First pass: determine which weeks meet the rating threshold
+        eligible_weeks = []
         
         for note_file in note_files:
             # Check rating if available
@@ -1653,13 +1653,48 @@ class ProfessorBot:
                 rating = ratings_map.get(note_file.name)
                 if rating is None:
                     console.print(f"[yellow]No rating found for {note_file.name}, excluding[/yellow]")
-                    excluded_count += 1
                     continue
                 elif rating < min_rating:
                     console.print(f"[dim]Excluding {note_file.name} (rating: {rating}/100)[/dim]")
-                    excluded_count += 1
                     continue
             
+            # This week is eligible
+            eligible_weeks.append((note_file, rating))
+        
+        # Track original count before cutoff for summary stats
+        weeks_meeting_rating_threshold = len(eligible_weeks)
+        excluded_by_cutoff = []
+        
+        # Apply max_weeks cutoff if needed
+        if len(eligible_weeks) > max_weeks:
+            console.print(f"\n[yellow]{'='*80}[/yellow]")
+            console.print(f"[yellow]Warning: {len(eligible_weeks)} weeks meet the rating threshold, but only {max_weeks} can be included[/yellow]")
+            console.print(f"[yellow]Selecting the {max_weeks} most recent weeks to stay within context limits[/yellow]")
+            console.print(f"[yellow]{'='*80}[/yellow]\n")
+            
+            # Sort by date (filename) in reverse chronological order (most recent first)
+            # Note filenames are like "2025-07-20.md", so alphabetical sort works for dates
+            eligible_weeks.sort(key=lambda x: x[0].stem, reverse=True)
+            
+            # Take only the top N most recent weeks
+            excluded_by_cutoff = eligible_weeks[max_weeks:]
+            eligible_weeks = eligible_weeks[:max_weeks]
+            
+            console.print(f"[dim]Excluded {len(excluded_by_cutoff)} weeks due to max_weeks limit:[/dim]")
+            for note_file, rating in excluded_by_cutoff[:5]:  # Show first 5
+                console.print(f"[dim]  - {note_file.name} (rating: {rating}/100)[/dim]")
+            if len(excluded_by_cutoff) > 5:
+                console.print(f"[dim]  ... and {len(excluded_by_cutoff) - 5} more[/dim]")
+            console.print()
+        
+        # Filter and combine notes
+        combined_content = []
+        combined_content.append("=== FILTERED CONVERSATION NOTES ===\n")
+        
+        included_count = 0
+        verbatim_count = 0
+        
+        for note_file, rating in eligible_weeks:
             # Determine if we should use verbatim transcript or summarized notes
             use_verbatim = rating and rating >= verbatim_chat_threshold and weekly_conversations_folder
             
@@ -1702,34 +1737,40 @@ class ProfessorBot:
                 console.print(f"[green]Including {note_file.name} (rating: {rating if rating else 'N/A'}/100)[/green]")
                 
                 # Load and process the note
-            with open(note_file, 'r', encoding='utf-8') as f:
-                content = f.read().strip()
-            
-            # Extract just the content after the metadata header
-            if "---" in content:
-                # Split on the second occurrence of "---" to skip the metadata
-                parts = content.split("---", 2)
-                if len(parts) >= 3:
-                    main_content = parts[2].strip()
+                with open(note_file, 'r', encoding='utf-8') as f:
+                    content = f.read().strip()
+                
+                # Extract just the content after the metadata header
+                if "---" in content:
+                    # Split on the second occurrence of "---" to skip the metadata
+                    parts = content.split("---", 2)
+                    if len(parts) >= 3:
+                        main_content = parts[2].strip()
+                    else:
+                        main_content = content
                 else:
                     main_content = content
-            else:
-                main_content = content
-            
-            combined_content.append(f"\n=== WEEK: {note_file.stem} ===\n")
-            combined_content.append(main_content)
-            combined_content.append("\n" + "="*50 + "\n")
-            included_count += 1
+                
+                combined_content.append(f"\n=== WEEK: {note_file.stem} ===\n")
+                combined_content.append(main_content)
+                combined_content.append("\n" + "="*50 + "\n")
+                included_count += 1
         
         combined_content.append("\n=== END FILTERED NOTES ===")
+        
+        # Calculate total exclusions
+        total_weeks = len(note_files)
+        weeks_excluded_by_rating = total_weeks - weeks_meeting_rating_threshold
         
         console.print(f"\n[blue]Notes summary:[/blue]")
         console.print(f"[green]  Included: {included_count} weeks[/green]")
         if verbatim_count > 0:
             console.print(f"[cyan]  Verbatim transcripts: {verbatim_count} weeks (rating >= {verbatim_chat_threshold})[/cyan]")
             console.print(f"[green]  Summarized notes: {included_count - verbatim_count} weeks[/green]")
-        if excluded_count > 0:
-            console.print(f"[dim]  Excluded: {excluded_count} weeks (below threshold)[/dim]")
+        if weeks_excluded_by_rating > 0:
+            console.print(f"[dim]  Excluded (below rating threshold): {weeks_excluded_by_rating} weeks[/dim]")
+        if len(excluded_by_cutoff) > 0:
+            console.print(f"[dim]  Excluded (max weeks limit): {len(excluded_by_cutoff)} weeks[/dim]")
         
         if included_count == 0:
             raise ValueError(f"No notes meet the minimum rating threshold of {min_rating}/100. Try lowering the threshold or running postdoc-bot first.")
