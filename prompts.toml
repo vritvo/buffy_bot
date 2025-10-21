@@ -21,6 +21,10 @@ paper_generation_max_tokens = 8192
 research_assistant_temperature = 0.3
 # Max tokens for research assistant analysis
 research_assistant_max_tokens = 4096
+# Maximum number of weeks to include in paper generation (after filtering by min_rating)
+# If more weeks are relevant, only the most recent N weeks will be included
+# This prevents context window overflow for papers with many highly-rated weeks
+max_weeks_for_paper = 8
 
 [buffy]
 system_prompt = """

@@ -72,6 +72,8 @@ Fully automated conference simulation with paper generation, review, and revisio
 - `--max-scripts`: Episode scripts to include (default: 5)
 - `--verbatim-chat-threshold`: Rating for using verbatim transcripts (default: 70)
 
+**Context Window Management:** If more than `max_weeks_for_paper` weeks (default: 8, configurable in `prompts.toml`) meet the rating threshold, only the most recent weeks are included to prevent context overflow.
+
 ### `researcher-bot`
 Generates 5-8 philosophically-driven paper abstracts with ratings (0-100) based on evidence support and novelty:
 ```bash
@@ -105,7 +107,9 @@ Key options:
 - `--max-scripts`: Episode scripts to include (default: 5)
 - `--verbatim-chat-threshold`: Rating for using verbatim transcripts (default: 70)
 
-**Note:** Weeks with ratings ≥ `--verbatim-chat-threshold` use the original verbatim conversation transcript instead of summarized grad notes.
+**Notes:** 
+- Weeks with ratings ≥ `--verbatim-chat-threshold` use the original verbatim conversation transcript instead of summarized grad notes.
+- If more than `max_weeks_for_paper` weeks (default: 8, configurable in `prompts.toml`) meet the rating threshold, only the most recent weeks are included to prevent context overflow.
 
 ## Output Structure
 
