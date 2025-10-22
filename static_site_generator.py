@@ -578,11 +578,12 @@ footer {
         # Generate paper list
         papers_html = '<div class="paper-grid">'
         for paper in self.papers:
-            abstract_preview = paper.abstract[:200] + "..." if len(paper.abstract) > 200 else paper.abstract
+            # Convert abstract markdown to HTML
+            abstract_html = markdown.markdown(paper.abstract)
             papers_html += f"""
             <div class="paper-card">
                 <h3>{paper.title}</h3>
-                <div class="abstract">{abstract_preview}</div>
+                <div class="abstract">{abstract_html}</div>
                 <a href="papers/{paper.folder_name}.html" class="read-more">Read more →</a>
             </div>
             """
@@ -654,13 +655,16 @@ footer {
             pdf_filename = f"{paper.folder_name}.pdf"
             pdf_link = f'<a href="../pdfs/{pdf_filename}" class="btn">Download PDF</a>'
         
+        # Convert abstract markdown to HTML
+        abstract_html = markdown.markdown(paper.abstract)
+        
         content = f"""
         <div class="paper-details">
             <h1>{paper.title}</h1>
             
             <div class="abstract">
                 <h2 class="abstract-heading">Abstract</h2>
-                {paper.abstract}
+                {abstract_html}
             </div>
             
             <div class="links">
