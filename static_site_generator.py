@@ -213,6 +213,15 @@ class StaticSiteGenerator:
         """Generate complete static site"""
         console.print("\n[cyan]Generating static site...[/cyan]")
         
+        # Validate required markdown files
+        if not landing_md or not landing_md.exists():
+            console.print(f"[red]Error: Landing page markdown file not found: {landing_md}[/red]")
+            raise FileNotFoundError(f"Landing page markdown file required but not found: {landing_md}")
+        
+        if not tech_md or not tech_md.exists():
+            console.print(f"[red]Error: Technical documentation markdown file not found: {tech_md}[/red]")
+            raise FileNotFoundError(f"Technical documentation markdown file required but not found: {tech_md}")
+        
         # Create output directory structure
         self.output_dir.mkdir(exist_ok=True)
         (self.output_dir / 'papers').mkdir(exist_ok=True)
@@ -227,8 +236,7 @@ class StaticSiteGenerator:
         self._generate_landing_page(landing_md)
         
         # Generate tech documentation
-        if tech_md and tech_md.exists():
-            self._generate_tech_page(tech_md)
+        self._generate_tech_page(tech_md)
         
         # Generate paper pages
         for paper in self.papers:
@@ -503,6 +511,20 @@ footer {
     margin-bottom: 15px;
 }
 
+.papers-heading {
+    margin-top: 40px;
+    color: #667eea;
+}
+
+.abstract-heading {
+    color: #667eea;
+    margin-bottom: 15px;
+}
+
+nav a.active {
+    color: #764ba2;
+}
+
 @media (max-width: 768px) {
     .paper-grid {
         grid-template-columns: 1fr;
@@ -524,20 +546,12 @@ footer {
         css_path = self.output_dir / 'css' / 'style.css'
         css_path.write_text(css)
     
-    def _generate_landing_page(self, landing_md: Optional[Path]):
+    def _generate_landing_page(self, landing_md: Path):
         """Generate landing page"""
         console.print("[cyan]Generating landing page...[/cyan]")
         
         # Read landing page content
-        landing_content = ""
-        if landing_md and landing_md.exists():
-            landing_content = markdown.markdown(landing_md.read_text())
-        else:
-            landing_content = """
-            <h2>Welcome to the Conference Papers Archive</h2>
-            <p>This site contains the final accepted papers from our academic conference,
-            complete with peer reviews and supporting materials.</p>
-            """
+        landing_content = markdown.markdown(landing_md.read_text())
         
         # Generate paper list
         papers_html = '<div class="paper-grid">'
@@ -559,7 +573,7 @@ footer {
                 {landing_content}
             </div>
             
-            <h2 style="margin-top: 40px; color: #667eea;">Accepted Papers</h2>
+            <h2 class="papers-heading">Accepted Papers</h2>
             {papers_html}
             """,
             active_page="home"
@@ -617,7 +631,7 @@ footer {
             <h2>{paper.title}</h2>
             
             <div class="abstract">
-                <h3 style="color: #667eea; margin-bottom: 15px;">Abstract</h3>
+                <h3 class="abstract-heading">Abstract</h3>
                 {paper.abstract}
             </div>
             
@@ -632,7 +646,8 @@ footer {
         html = self._wrap_html(
             title=paper.title,
             content=content,
-            active_page=""
+            active_page="",
+            css_path="../css/style.css"
         )
         
         output_path = self.output_dir / 'papers' / f'{paper.folder_name}.html'
@@ -697,7 +712,8 @@ footer {
                 html = self._wrap_html(
                     title=f"Review #{i} - {paper.title}",
                     content=review_html,
-                    active_page=""
+                    active_page="",
+                    css_path="../css/style.css"
                 )
                 
                 review_id = review_path.stem
@@ -707,19 +723,30 @@ footer {
             except Exception as e:
                 console.print(f"[red]Error generating review page for {review_path}: {e}[/red]")
     
-    def _wrap_html(self, title: str, content: str, active_page: str = "") -> str:
-        """Wrap content in HTML template"""
+    def _wrap_html(self, title: str, content: str, active_page: str = "", css_path: str = "css/style.css") -> str:
+        """Wrap content in HTML template
+        
+        Args:
+            title: Page title
+            content: HTML content for the page
+            active_page: Which nav item is active ('home', 'tech', or '')
+            css_path: Relative path to CSS file (default: 'css/style.css' for root pages,
+                     use '../css/style.css' for pages in subdirectories)
+        """
+        
+        # Determine base path for navigation links based on CSS path
+        nav_base = "../" if css_path.startswith("../") else ""
         
         # Build navigation
         nav_items = [
-            ('index.html', 'Home', 'home'),
-            ('technical_documentation.html', 'Technical Documentation', 'tech'),
+            (f'{nav_base}index.html', 'Home', 'home'),
+            (f'{nav_base}technical_documentation.html', 'Technical Documentation', 'tech'),
         ]
         
         nav_html = '<ul>'
         for href, label, page_id in nav_items:
-            active = 'style="color: #764ba2;"' if page_id == active_page else ''
-            nav_html += f'<li><a href="{href}" {active}>{label}</a></li>'
+            active_class = ' class="active"' if page_id == active_page else ''
+            nav_html += f'<li><a href="{href}"{active_class}>{label}</a></li>'
         nav_html += '</ul>'
         
         return f"""<!DOCTYPE html>
@@ -728,7 +755,7 @@ footer {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{title}</title>
-    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="{css_path}">
 </head>
 <body>
     <header>
@@ -764,17 +791,21 @@ footer {
 @click.command()
 @click.option('--papers-dir', default='papers', help='Path to papers directory (default: papers)')
 @click.option('--output-dir', default='conference_site', help='Output directory for static site (default: conference_site)')
-@click.option('--landing-page', default='landing_page.md', help='Markdown file for landing page content (default: landing_page.md)')
-@click.option('--tech-docs', default='tech_explanation.md', help='Markdown file for technical documentation (default: tech_explanation.md)')
+@click.option('--landing-page', default='landing_page.md', help='Markdown file for landing page content (required, default: landing_page.md)')
+@click.option('--tech-docs', default='tech_explanation.md', help='Markdown file for technical documentation (required, default: tech_explanation.md)')
 def generate_site(papers_dir: str, output_dir: str, landing_page: str, tech_docs: str):
-    """Generate static website from conference paper folders"""
+    """Generate static website from conference paper folders
+    
+    Both landing-page and tech-docs markdown files are required.
+    The generator will fail if either file is missing.
+    """
     
     console.print("[bold cyan]Static Site Generator for Conference Papers[/bold cyan]\n")
     
     papers_path = Path(papers_dir)
     output_path = Path(output_dir)
-    landing_path = Path(landing_page) if landing_page else None
-    tech_path = Path(tech_docs) if tech_docs else None
+    landing_path = Path(landing_page)
+    tech_path = Path(tech_docs)
     
     if not papers_path.exists():
         console.print(f"[red]Error: Papers directory '{papers_dir}' does not exist[/red]")
@@ -786,11 +817,14 @@ def generate_site(papers_dir: str, output_dir: str, landing_page: str, tech_docs
     # Scan papers
     generator.scan_papers()
     
-    # Generate site
-    generator.generate_site(landing_path, tech_path)
-    
-    console.print(f"\n[green]✓ Static site generated successfully![/green]")
-    console.print(f"[blue]Open {output_path / 'index.html'} in your browser to view the site[/blue]")
+    # Generate site (will fail if markdown files are missing)
+    try:
+        generator.generate_site(landing_path, tech_path)
+        console.print("\n[green]✓ Static site generated successfully![/green]")
+        console.print(f"[blue]Open {output_path / 'index.html'} in your browser to view the site[/blue]")
+    except FileNotFoundError as e:
+        console.print(f"\n[red]✗ Failed to generate site: {e}[/red]")
+        return
 
 
 if __name__ == '__main__':

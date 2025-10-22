@@ -7,12 +7,14 @@ The static site generator creates a beautiful, responsive website from your conf
 ## Quick Start
 
 ```bash
-# Generate site with default settings
+# Generate site with default settings (requires landing_page.md and tech_explanation.md)
 uv run python static_site_generator.py
 
 # Open the generated site in your browser
 open conference_site/index.html
 ```
+
+**Note:** Both `landing_page.md` and `tech_explanation.md` are **required**. The generator will fail with a clear error message if either file is missing.
 
 ## Command Options
 
@@ -28,8 +30,10 @@ uv run python static_site_generator.py \
 
 - `--papers-dir`: Directory containing paper folders from `run-conference` (default: `papers`)
 - `--output-dir`: Where to generate the static site (default: `conference_site`)
-- `--landing-page`: Markdown file for landing page content (default: `landing_page.md`)
-- `--tech-docs`: Markdown file for technical documentation (default: `tech_explanation.md`)
+- `--landing-page`: Markdown file for landing page content (required, default: `landing_page.md`)
+- `--tech-docs`: Markdown file for technical documentation (required, default: `tech_explanation.md`)
+
+Both markdown files must exist or the generator will fail with an error.
 
 ## How It Works
 
@@ -127,6 +131,7 @@ The generated site includes:
 ✅ **Easy Navigation** - Sticky nav bar and consistent breadcrumbs
 ✅ **Readable Typography** - Optimized fonts and spacing
 ✅ **Professional Styling** - Subtle shadows and smooth transitions
+✅ **Clean CSS** - All styling in one CSS file, no inline styles
 
 ## Deploying Your Site
 
@@ -166,6 +171,12 @@ Copy the `conference_site` folder to your web server's public directory.
 
 - Ensure papers have an `## Abstract` section
 - Check that abstracts come after YAML frontmatter (if present)
+
+### Missing markdown files
+
+- The generator requires both `landing_page.md` and `tech_explanation.md`
+- Create these files or specify different paths with `--landing-page` and `--tech-docs`
+- The generator will fail immediately if either file is missing
 
 ### Broken links
 
