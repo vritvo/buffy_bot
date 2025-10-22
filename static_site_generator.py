@@ -172,6 +172,7 @@ class StaticSiteGenerator:
         self.papers_dir = papers_dir
         self.output_dir = output_dir
         self.papers: List[PaperFolder] = []
+        self.paper_series: Dict[str, List[PaperFolder]] = {}  # Track all versions
         
     def scan_papers(self):
         """Scan papers directory and identify final accepted versions"""
@@ -181,15 +182,14 @@ class StaticSiteGenerator:
         all_papers = [PaperFolder(f) for f in all_folders]
         
         # Group by base paper series
-        paper_series: Dict[str, List[PaperFolder]] = {}
         for paper in all_papers:
             series = paper.get_base_paper_series()
-            if series not in paper_series:
-                paper_series[series] = []
-            paper_series[series].append(paper)
+            if series not in self.paper_series:
+                self.paper_series[series] = []
+            self.paper_series[series].append(paper)
         
         # For each series, find the highest version that's accepted
-        for series, versions in paper_series.items():
+        for series, versions in self.paper_series.items():
             # Sort by version number (highest first)
             versions.sort(key=lambda p: p.version, reverse=True)
             
@@ -230,7 +230,7 @@ class StaticSiteGenerator:
         # Create output directory structure
         self.output_dir.mkdir(exist_ok=True)
         (self.output_dir / 'papers').mkdir(exist_ok=True)
-        (self.output_dir / 'reviews').mkdir(exist_ok=True)
+        (self.output_dir / 'iterations').mkdir(exist_ok=True)
         (self.output_dir / 'pdfs').mkdir(exist_ok=True)
         (self.output_dir / 'css').mkdir(exist_ok=True)
         
@@ -243,11 +243,22 @@ class StaticSiteGenerator:
         # Generate tech documentation
         self._generate_tech_page(tech_md)
         
-        # Generate paper pages
+        # Generate paper pages and copy all versions
         for paper in self.papers:
-            self._generate_paper_page(paper)
-            self._copy_paper_pdf(paper)
-            self._generate_review_pages(paper)
+            # Get all versions for this paper series
+            series_name = paper.get_base_paper_series()
+            all_versions = self.paper_series.get(series_name, [paper])
+            # Sort by version (lowest first for chronological order)
+            all_versions.sort(key=lambda p: p.version)
+            
+            self._generate_paper_page(paper, all_versions)
+            
+            # Copy PDFs for all versions
+            for version in all_versions:
+                self._copy_paper_pdf(version)
+            
+            # Generate iteration pages
+            self._generate_iteration_pages(paper, all_versions)
         
         console.print(f"\n[green]✓ Site generated successfully in {self.output_dir}[/green]")
     
@@ -432,6 +443,32 @@ body {
     margin-left: 10px;
 }
 
+.review-item .decision.accept {
+    background: #28a745;
+}
+
+.review-item .decision.reject {
+    background: #dc3545;
+}
+
+.iteration-info {
+    color: #666;
+    font-style: italic;
+    margin-bottom: 20px;
+}
+
+.iteration-details h3 {
+    color: #667eea;
+    margin-top: 30px;
+    margin-bottom: 15px;
+}
+
+.iteration-details h4 {
+    color: #555;
+    margin-top: 20px;
+    margin-bottom: 10px;
+}
+
 .review-content {
     background: #f8f9fa;
     padding: 30px;
@@ -439,6 +476,22 @@ body {
     margin: 20px 0;
 }
 
+.review-content .decision {
+    display: inline-block;
+    padding: 4px 12px;
+    color: white;
+    border-radius: 4px;
+    font-size: 0.85em;
+    font-weight: 600;
+}
+
+.review-content .decision.accept {
+    background: #28a745;
+}
+
+.review-content .decision.reject {
+    background: #dc3545;
+}
 
 .review-content ul {
     margin-left: 20px;
@@ -624,36 +677,50 @@ footer {
         
         (self.output_dir / 'technical_documentation.html').write_text(html)
     
-    def _generate_paper_page(self, paper: PaperFolder):
-        """Generate individual paper page"""
+    def _generate_paper_page(self, paper: PaperFolder, all_versions: List[PaperFolder]):
+        """Generate individual paper page with review iterations"""
         console.print(f"[cyan]Generating page for: {paper.title}[/cyan]")
         
-        # Generate reviews section
-        reviews_html = '<div class="reviews-list"><h3>Peer Reviews</h3>'
-        for i, review_path in enumerate(paper.reviews, 1):
-            try:
-                with open(review_path, 'r') as f:
-                    review_data = json.load(f)
-                    decision = review_data.get('metadata', {}).get('decision', 'UNKNOWN')
-                    review_id = review_path.stem
-                    reviews_html += f"""
-                    <div class="review-item">
-                        <a href="../reviews/{paper.folder_name}_{review_id}.html">
-                            Review #{i}
-                        </a>
-                        <span class="decision">{decision}</span>
-                    </div>
-                    """
-            except Exception as e:
-                console.print(f"[yellow]Warning: Could not read review {review_path}: {e}[/yellow]")
+        # Generate iterations section
+        iterations_html = '<div class="reviews-list"><h3>Review Iterations</h3>'
         
-        reviews_html += '</div>'
+        for iteration_num, version in enumerate(all_versions, 1):
+            if not version.reviews:
+                continue
+            
+            # Determine overall decision for this iteration
+            all_accept = True
+            try:
+                for review_path in version.reviews:
+                    with open(review_path, 'r') as f:
+                        review_data = json.load(f)
+                        decision = review_data.get('metadata', {}).get('decision', 'UNKNOWN')
+                        if decision != 'ACCEPT':
+                            all_accept = False
+                            break
+            except Exception as e:
+                console.print(f"[yellow]Warning: Could not read reviews for version {version.folder_name}: {e}[/yellow]")
+                all_accept = False
+            
+            overall_decision = "ACCEPT" if all_accept else "REJECT"
+            decision_class = "accept" if all_accept else "reject"
+            
+            iterations_html += f"""
+            <div class="review-item">
+                <a href="../iterations/{paper.get_base_paper_series()}_iteration_{iteration_num}.html">
+                    Iteration {iteration_num}
+                </a>
+                <span class="decision {decision_class}">{overall_decision}</span>
+            </div>
+            """
+        
+        iterations_html += '</div>'
         
         # Generate links
         pdf_link = ""
         if paper.paper_pdf:
             pdf_filename = f"{paper.folder_name}.pdf"
-            pdf_link = f'<a href="../pdfs/{pdf_filename}" class="btn">Download PDF</a>'
+            pdf_link = f'<a href="../pdfs/{pdf_filename}" class="btn">Download Final PDF</a>'
         
         # Convert abstract markdown to HTML
         abstract_html = markdown.markdown(paper.abstract)
@@ -672,7 +739,7 @@ footer {
                 <a href="../index.html" class="btn secondary">← Back to Conference</a>
             </div>
             
-            {reviews_html}
+            {iterations_html}
         </div>
         """
         
@@ -690,6 +757,105 @@ footer {
         if paper.paper_pdf and paper.paper_pdf.exists():
             dest = self.output_dir / 'pdfs' / f'{paper.folder_name}.pdf'
             shutil.copy2(paper.paper_pdf, dest)
+    
+    def _generate_iteration_pages(self, final_paper: PaperFolder, all_versions: List[PaperFolder]):
+        """Generate pages for each review iteration showing all reviews for that iteration"""
+        base_series = final_paper.get_base_paper_series()
+        
+        for iteration_num, version in enumerate(all_versions, 1):
+            if not version.reviews:
+                continue
+            
+            console.print(f"[cyan]Generating iteration {iteration_num} page for: {final_paper.title}[/cyan]")
+            
+            # Determine overall decision
+            all_accept = True
+            try:
+                for review_path in version.reviews:
+                    with open(review_path, 'r') as f:
+                        review_data = json.load(f)
+                        decision = review_data.get('metadata', {}).get('decision', 'UNKNOWN')
+                        if decision != 'ACCEPT':
+                            all_accept = False
+                            break
+            except Exception:
+                all_accept = False
+            
+            overall_decision = "ACCEPT" if all_accept else "REJECT"
+            
+            # Generate reviews HTML for this iteration
+            reviews_html = f"""
+            <h2>Iteration {iteration_num}: {overall_decision}</h2>
+            <p class="iteration-info">This iteration contains {len(version.reviews)} review(s).</p>
+            """
+            
+            # Add each review
+            for review_idx, review_path in enumerate(version.reviews, 1):
+                try:
+                    with open(review_path, 'r') as f:
+                        review_data = json.load(f)
+                    
+                    metadata = review_data.get('metadata', {})
+                    review = review_data.get('review', {})
+                    
+                    decision = metadata.get('decision', 'UNKNOWN')
+                    reviewed_at = metadata.get('reviewed_at', '')
+                    
+                    reviews_html += f"""
+                    <div class="review-content">
+                        <h3>Reviewer {review_idx}</h3>
+                        
+                        <p><strong>Decision:</strong> <span class="decision {'accept' if decision == 'ACCEPT' else 'reject'}">{decision}</span></p>
+                        <p><strong>Reviewed:</strong> {reviewed_at}</p>
+                        
+                        <h4>Overall Assessment</h4>
+                        <p>{review.get('overall_assessment', 'N/A')}</p>
+                        
+                        <h4>Strengths</h4>
+                        <ul>
+                        {''.join(f'<li>{s}</li>' for s in review.get('strengths', []))}
+                        </ul>
+                        
+                        <h4>Weaknesses</h4>
+                        <ul>
+                        {''.join(f'<li>{w}</li>' for w in review.get('weaknesses', []))}
+                        </ul>
+                        
+                        <h4>Detailed Comments</h4>
+                        <p>{review.get('detailed_comments', 'N/A')}</p>
+                    </div>
+                    """
+                    
+                except Exception as e:
+                    console.print(f"[red]Error processing review {review_path}: {e}[/red]")
+            
+            # Add link to the PDF that was reviewed
+            pdf_link = ""
+            if version.paper_pdf:
+                pdf_filename = f"{version.folder_name}.pdf"
+                pdf_link = f'<a href="../pdfs/{pdf_filename}" class="btn">Download Reviewed Paper (Iteration {iteration_num})</a>'
+            
+            # Wrap in complete page structure
+            content = f"""
+            <div class="iteration-details">
+                <h1>{final_paper.title}</h1>
+                {reviews_html}
+                
+                <div class="links">
+                    {pdf_link}
+                    <a href="../papers/{final_paper.folder_name}.html" class="btn secondary">← Back to Final Paper</a>
+                </div>
+            </div>
+            """
+            
+            html = self._wrap_html(
+                title=f"Iteration {iteration_num} - {final_paper.title}",
+                content=content,
+                css_path="../css/style.css"
+            )
+            
+            output_path = self.output_dir / 'iterations' / f'{base_series}_iteration_{iteration_num}.html'
+            output_path.write_text(html)
     
     def _generate_review_pages(self, paper: PaperFolder):
         """Generate individual review pages"""
