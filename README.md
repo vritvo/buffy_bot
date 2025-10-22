@@ -69,15 +69,16 @@ uv run python static_site_generator.py
 Key options:
 - `--papers-dir`: Path to papers directory (default: `papers`)
 - `--output-dir`: Output directory for static site (default: `conference_site`)
-- `--landing-page`: Markdown file for landing page content (default: `landing_page.md`)
-- `--tech-docs`: Markdown file for technical documentation (default: `tech_explanation.md`)
+- `--landing-page`: Markdown file for landing page content (required, default: `landing_page.md`)
+- `--tech-docs`: Markdown file for technical documentation (required, default: `tech_explanation.md`)
+- `--custom-css`: Optional custom CSS file to use instead of default styling
 
 The generator creates a complete static website with:
 - Landing page with all accepted papers
 - Technical documentation page
 - Individual pages for each final paper (with abstracts and PDF downloads)
 - Individual review pages for each peer review (with links to reviewed PDFs)
-- Responsive design with modern CSS styling
+- Responsive design with modern CSS styling (or your custom CSS)
 
 ## Key Options
 

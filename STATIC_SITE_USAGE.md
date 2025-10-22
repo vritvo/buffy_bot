@@ -32,6 +32,7 @@ uv run python static_site_generator.py \
 - `--output-dir`: Where to generate the static site (default: `conference_site`)
 - `--landing-page`: Markdown file for landing page content (required, default: `landing_page.md`)
 - `--tech-docs`: Markdown file for technical documentation (required, default: `tech_explanation.md`)
+- `--custom-css`: Optional custom CSS file to use instead of default styling
 
 Both markdown files must exist or the generator will fail with an error.
 
@@ -102,6 +103,23 @@ Edit `tech_explanation.md` to document your system. Supports:
 - Headers, lists, and text formatting
 - Code blocks with syntax highlighting
 - Tables
+
+### Custom Styling
+
+You can provide your own CSS file to completely customize the site's appearance:
+
+```bash
+uv run python static_site_generator.py --custom-css my_style.css
+```
+
+Your custom CSS file should define all the necessary classes and styles. Key classes to include:
+- `.container`, `.content`, `.paper-card`, `.paper-grid`
+- `.btn`, `.btn.secondary`
+- `.reviews-list`, `.review-item`, `.review-content`
+- `.markdown-content`, `.abstract`, `.abstract-heading`
+- `header`, `nav`, `footer`
+
+The generator will copy your CSS file to `conference_site/css/style.css` and all pages will use it.
 
 ## Output Structure
 
@@ -189,9 +207,9 @@ Copy the `conference_site` folder to your web server's public directory.
 
 To generate a site for only specific papers, temporarily move unwanted paper folders out of the papers directory before running the generator.
 
-### Custom Styling
+### Post-Generation Styling
 
-Edit `conference_site/css/style.css` after generation to customize colors, fonts, and layout. Key variables to change:
+After generation, you can edit `conference_site/css/style.css` directly to tweak colors, fonts, and layout:
 
 ```css
 /* Primary gradient colors */
@@ -201,6 +219,8 @@ background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
 color: #667eea;
 border-left: 4px solid #667eea;
 ```
+
+Note: Changes to the generated CSS will be overwritten on the next generation. Use `--custom-css` to preserve your styling across regenerations.
 
 ### Multiple Conferences
 
