@@ -60,6 +60,25 @@ CLAUDE_API_KEY=your-claude-api-key
 
 See "How It Works" section above for the main workflows. All commands use the most recent grad notes folder by default, or you can specify with `--notes-folder`.
 
+### `static-site-generator`
+Generate a static website from conference paper folders:
+```bash
+uv run python static_site_generator.py
+```
+
+Key options:
+- `--papers-dir`: Path to papers directory (default: `papers`)
+- `--output-dir`: Output directory for static site (default: `conference_site`)
+- `--landing-page`: Markdown file for landing page content (default: `landing_page.md`)
+- `--tech-docs`: Markdown file for technical documentation (default: `tech_explanation.md`)
+
+The generator creates a complete static website with:
+- Landing page with all accepted papers
+- Technical documentation page
+- Individual pages for each final paper (with abstracts and PDF downloads)
+- Individual review pages for each peer review (with links to reviewed PDFs)
+- Responsive design with modern CSS styling
+
 ## Key Options
 
 ### `run-conference`
@@ -142,4 +161,19 @@ grad_notes/grad_bot_analysis_20251013_144539/
 ├── 2025-07-20.md              # Weekly analysis
 ├── 2025-07-27.md
 └── paper_abstracts.json       # Generated paper ideas (from researcher-bot)
+
+conference_site/                # Generated static website
+├── index.html                  # Landing page
+├── technical_documentation.html
+├── css/
+│   └── style.css
+├── papers/                     # Individual paper pages
+│   ├── 20251021_014943_Spikes_Journey_*.html
+│   └── ...
+├── reviews/                    # Individual review pages
+│   ├── *_reviewer1.html
+│   └── ...
+└── pdfs/                       # Paper PDFs for download
+    ├── 20251021_014943_Spikes_Journey_*.pdf
+    └── ...
 ```

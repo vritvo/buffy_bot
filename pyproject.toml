@@ -10,7 +10,8 @@ dependencies = [
     "click",
     "rich",
     "anthropic",
-    "toml"
+    "toml",
+    "markdown"
 ]
 
 [project.optional-dependencies]
