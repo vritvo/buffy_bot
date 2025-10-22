@@ -22,3 +22,6 @@ grad_notes/
 logs
 backups/
 notes
+
+# Generated site
+conference_site/
