@@ -209,7 +209,7 @@ class StaticSiteGenerator:
         
         console.print(f"[green]Found {len(self.papers)} final papers[/green]")
     
-    def generate_site(self, landing_md: Optional[Path], tech_md: Optional[Path]):
+    def generate_site(self, landing_md: Optional[Path], tech_md: Optional[Path], custom_css: Optional[Path] = None):
         """Generate complete static site"""
         console.print("\n[cyan]Generating static site...[/cyan]")
         
@@ -222,6 +222,11 @@ class StaticSiteGenerator:
             console.print(f"[red]Error: Technical documentation markdown file not found: {tech_md}[/red]")
             raise FileNotFoundError(f"Technical documentation markdown file required but not found: {tech_md}")
         
+        # Validate custom CSS if provided
+        if custom_css and not custom_css.exists():
+            console.print(f"[red]Error: Custom CSS file not found: {custom_css}[/red]")
+            raise FileNotFoundError(f"Custom CSS file not found: {custom_css}")
+        
         # Create output directory structure
         self.output_dir.mkdir(exist_ok=True)
         (self.output_dir / 'papers').mkdir(exist_ok=True)
@@ -229,8 +234,8 @@ class StaticSiteGenerator:
         (self.output_dir / 'pdfs').mkdir(exist_ok=True)
         (self.output_dir / 'css').mkdir(exist_ok=True)
         
-        # Generate CSS
-        self._generate_css()
+        # Generate or copy CSS
+        self._generate_css(custom_css)
         
         # Generate landing page
         self._generate_landing_page(landing_md)
@@ -246,8 +251,21 @@ class StaticSiteGenerator:
         
         console.print(f"\n[green]✓ Site generated successfully in {self.output_dir}[/green]")
     
-    def _generate_css(self):
-        """Generate CSS stylesheet"""
+    def _generate_css(self, custom_css: Optional[Path] = None):
+        """Generate CSS stylesheet or copy custom CSS file
+        
+        Args:
+            custom_css: Optional path to custom CSS file. If provided, copies this file
+                       instead of generating the default CSS.
+        """
+        css_output_path = self.output_dir / 'css' / 'style.css'
+        
+        if custom_css:
+            console.print(f"[cyan]Using custom CSS: {custom_css}[/cyan]")
+            shutil.copy2(custom_css, css_output_path)
+            return
+        
+        console.print("[cyan]Generating default CSS...[/cyan]")
         css = """
 * {
     margin: 0;
@@ -259,67 +277,38 @@ body {
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
     line-height: 1.6;
     color: #333;
-    background: #f5f5f5;
+    background: white;
 }
 
 .container {
     max-width: 1200px;
     margin: 0 auto;
-    padding: 20px;
+    padding: 40px 20px;
 }
 
-header {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    color: white;
-    padding: 40px 0;
-    margin-bottom: 40px;
-    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-}
-
-header h1 {
-    font-size: 2.5em;
-    margin-bottom: 10px;
-}
-
-header p {
-    font-size: 1.2em;
-    opacity: 0.9;
-}
-
-nav {
-    background: white;
-    padding: 15px 0;
+.content {
+    padding: 0;
     margin-bottom: 30px;
-    box-shadow: 0 2px 5px rgba(0,0,0,0.05);
-    position: sticky;
-    top: 0;
-    z-index: 100;
 }
 
-nav ul {
-    list-style: none;
-    display: flex;
-    gap: 30px;
-    flex-wrap: wrap;
+.content h1 {
+    font-size: 2.5em;
+    color: #667eea;
+    margin-bottom: 20px;
+    padding-bottom: 15px;
+    border-bottom: 3px solid #667eea;
 }
 
-nav a {
+.inline-link {
     color: #667eea;
     text-decoration: none;
     font-weight: 500;
     transition: color 0.2s;
 }
 
-nav a:hover {
+.inline-link:hover {
     color: #764ba2;
-}
-
-.content {
-    background: white;
-    padding: 40px;
-    border-radius: 8px;
-    box-shadow: 0 2px 10px rgba(0,0,0,0.05);
-    margin-bottom: 30px;
+    text-decoration: underline;
 }
 
 .paper-grid {
@@ -386,8 +375,9 @@ nav a:hover {
 .links {
     margin: 30px 0;
     display: flex;
+    flex-direction: column;
     gap: 15px;
-    flex-wrap: wrap;
+    align-items: flex-start;
 }
 
 .btn {
@@ -449,11 +439,6 @@ nav a:hover {
     margin: 20px 0;
 }
 
-.review-content h4 {
-    color: #667eea;
-    margin-top: 20px;
-    margin-bottom: 10px;
-}
 
 .review-content ul {
     margin-left: 20px;
@@ -472,18 +457,26 @@ footer {
     border-top: 1px solid #ddd;
 }
 
-.markdown-content h1,
-.markdown-content h2,
-.markdown-content h3 {
+.markdown-content h1 {
+    font-size: 2.5em;
+    color: #667eea;
+    margin-bottom: 20px;
+    padding-bottom: 15px;
+    border-bottom: 3px solid #667eea;
+}
+
+.markdown-content h2 {
     color: #667eea;
     margin-top: 30px;
     margin-bottom: 15px;
+    font-size: 1.8em;
 }
 
-.markdown-content h1 {
-    font-size: 2em;
-    border-bottom: 2px solid #667eea;
-    padding-bottom: 10px;
+.markdown-content h3 {
+    color: #555;
+    margin-top: 25px;
+    margin-bottom: 12px;
+    font-size: 1.4em;
 }
 
 .markdown-content p {
@@ -512,17 +505,42 @@ footer {
 }
 
 .papers-heading {
-    margin-top: 40px;
+    margin-top: 50px;
+    margin-bottom: 30px;
     color: #667eea;
+    font-size: 2em;
+    padding-bottom: 10px;
+    border-bottom: 2px solid #667eea;
 }
 
 .abstract-heading {
     color: #667eea;
+    margin-top: 30px;
     margin-bottom: 15px;
+    font-size: 1.8em;
 }
 
-nav a.active {
-    color: #764ba2;
+.paper-details h1 {
+    font-size: 2.5em;
+    color: #667eea;
+    margin-bottom: 20px;
+    padding-bottom: 15px;
+    border-bottom: 3px solid #667eea;
+}
+
+.review-content h1 {
+    font-size: 2.2em;
+    color: #667eea;
+    margin-bottom: 20px;
+    padding-bottom: 15px;
+    border-bottom: 3px solid #667eea;
+}
+
+.review-content h2 {
+    color: #667eea;
+    margin-top: 30px;
+    margin-bottom: 15px;
+    font-size: 1.5em;
 }
 
 @media (max-width: 768px) {
@@ -530,16 +548,13 @@ nav a.active {
         grid-template-columns: 1fr;
     }
     
-    header h1 {
+    .content h1,
+    .markdown-content h1 {
         font-size: 2em;
     }
     
-    .content {
-        padding: 20px;
-    }
-    
-    nav ul {
-        gap: 15px;
+    .container {
+        padding: 20px 15px;
     }
 }
 """
@@ -550,8 +565,15 @@ nav a.active {
         """Generate landing page"""
         console.print("[cyan]Generating landing page...[/cyan]")
         
-        # Read landing page content
+        # Read landing page content and convert to HTML
         landing_content = markdown.markdown(landing_md.read_text())
+        
+        # Insert "Read more" link to technical documentation after first paragraph
+        # Split content into paragraphs and insert link after first </p>
+        first_p_end = landing_content.find('</p>')
+        if first_p_end != -1:
+            tech_link = '\n<p><a href="technical_documentation.html" class="inline-link">Read more</a></p>'
+            landing_content = landing_content[:first_p_end] + landing_content[first_p_end:first_p_end+4] + tech_link + landing_content[first_p_end+4:]
         
         # Generate paper list
         papers_html = '<div class="paper-grid">'
@@ -575,8 +597,7 @@ nav a.active {
             
             <h2 class="papers-heading">Accepted Papers</h2>
             {papers_html}
-            """,
-            active_page="home"
+            """
         )
         
         (self.output_dir / 'index.html').write_text(html)
@@ -589,8 +610,15 @@ nav a.active {
         
         html = self._wrap_html(
             title="Technical Documentation",
-            content=f'<div class="markdown-content">{content}</div>',
-            active_page="tech"
+            content=f"""
+            <div class="markdown-content">
+                {content}
+            </div>
+            <div class="links">
+                <a href="index.html" class="btn secondary">← Back to Conference</a>
+            </div>
+            """,
+            css_path="css/style.css"
         )
         
         (self.output_dir / 'technical_documentation.html').write_text(html)
@@ -628,15 +656,16 @@ nav a.active {
         
         content = f"""
         <div class="paper-details">
-            <h2>{paper.title}</h2>
+            <h1>{paper.title}</h1>
             
             <div class="abstract">
-                <h3 class="abstract-heading">Abstract</h3>
+                <h2 class="abstract-heading">Abstract</h2>
                 {paper.abstract}
             </div>
             
             <div class="links">
                 {pdf_link}
+                <a href="../index.html" class="btn secondary">← Back to Conference</a>
             </div>
             
             {reviews_html}
@@ -646,7 +675,6 @@ nav a.active {
         html = self._wrap_html(
             title=paper.title,
             content=content,
-            active_page="",
             css_path="../css/style.css"
         )
         
@@ -676,35 +704,35 @@ nav a.active {
                 pdf_link = ""
                 if paper.paper_pdf:
                     pdf_filename = f"{paper.folder_name}.pdf"
-                    pdf_link = f'<a href="../pdfs/{pdf_filename}" class="btn">Download Reviewed PDF</a>'
+                    pdf_link = f'<a href="../pdfs/{pdf_filename}" class="btn">Download Reviewed Paper</a>'
                 
                 # Format review content
                 review_html = f"""
                 <div class="review-content">
-                    <h2>Review #{i} for: {paper.title}</h2>
+                    <h1>Review #{i} for: {paper.title}</h1>
                     
                     <p><strong>Decision:</strong> <span class="decision">{decision}</span></p>
                     <p><strong>Reviewed:</strong> {reviewed_at}</p>
                     
-                    <h4>Overall Assessment</h4>
+                    <h2>Overall Assessment</h2>
                     <p>{review.get('overall_assessment', 'N/A')}</p>
                     
-                    <h4>Strengths</h4>
+                    <h2>Strengths</h2>
                     <ul>
                     {''.join(f'<li>{s}</li>' for s in review.get('strengths', []))}
                     </ul>
                     
-                    <h4>Weaknesses</h4>
+                    <h2>Weaknesses</h2>
                     <ul>
                     {''.join(f'<li>{w}</li>' for w in review.get('weaknesses', []))}
                     </ul>
                     
-                    <h4>Detailed Comments</h4>
+                    <h2>Detailed Comments</h2>
                     <p>{review.get('detailed_comments', 'N/A')}</p>
                     
                     <div class="links">
                         {pdf_link}
-                        <a href="../papers/{paper.folder_name}.html" class="btn secondary">← Back to Paper</a>
+                        <a href="../papers/{paper.folder_name}.html" class="btn secondary">← Back to Final Paper</a>
                     </div>
                 </div>
                 """
@@ -712,7 +740,6 @@ nav a.active {
                 html = self._wrap_html(
                     title=f"Review #{i} - {paper.title}",
                     content=review_html,
-                    active_page="",
                     css_path="../css/style.css"
                 )
                 
@@ -723,31 +750,15 @@ nav a.active {
             except Exception as e:
                 console.print(f"[red]Error generating review page for {review_path}: {e}[/red]")
     
-    def _wrap_html(self, title: str, content: str, active_page: str = "", css_path: str = "css/style.css") -> str:
+    def _wrap_html(self, title: str, content: str, css_path: str = "css/style.css") -> str:
         """Wrap content in HTML template
         
         Args:
             title: Page title
             content: HTML content for the page
-            active_page: Which nav item is active ('home', 'tech', or '')
             css_path: Relative path to CSS file (default: 'css/style.css' for root pages,
                      use '../css/style.css' for pages in subdirectories)
         """
-        
-        # Determine base path for navigation links based on CSS path
-        nav_base = "../" if css_path.startswith("../") else ""
-        
-        # Build navigation
-        nav_items = [
-            (f'{nav_base}index.html', 'Home', 'home'),
-            (f'{nav_base}technical_documentation.html', 'Technical Documentation', 'tech'),
-        ]
-        
-        nav_html = '<ul>'
-        for href, label, page_id in nav_items:
-            active_class = ' class="active"' if page_id == active_page else ''
-            nav_html += f'<li><a href="{href}"{active_class}>{label}</a></li>'
-        nav_html += '</ul>'
         
         return f"""<!DOCTYPE html>
 <html lang="en">
@@ -758,19 +769,6 @@ nav a.active {
     <link rel="stylesheet" href="{css_path}">
 </head>
 <body>
-    <header>
-        <div class="container">
-            <h1>Conference Papers Archive</h1>
-            <p>Academic papers with peer reviews</p>
-        </div>
-    </header>
-    
-    <nav>
-        <div class="container">
-            {nav_html}
-        </div>
-    </nav>
-    
     <div class="container">
         <div class="content">
             {content}
@@ -793,11 +791,14 @@ nav a.active {
 @click.option('--output-dir', default='conference_site', help='Output directory for static site (default: conference_site)')
 @click.option('--landing-page', default='landing_page.md', help='Markdown file for landing page content (required, default: landing_page.md)')
 @click.option('--tech-docs', default='tech_explanation.md', help='Markdown file for technical documentation (required, default: tech_explanation.md)')
-def generate_site(papers_dir: str, output_dir: str, landing_page: str, tech_docs: str):
+@click.option('--custom-css', default=None, help='Optional custom CSS file to use instead of default styling')
+def generate_site(papers_dir: str, output_dir: str, landing_page: str, tech_docs: str, custom_css: str):
     """Generate static website from conference paper folders
     
     Both landing-page and tech-docs markdown files are required.
     The generator will fail if either file is missing.
+    
+    Optionally provide a custom CSS file with --custom-css to override the default styling.
     """
     
     console.print("[bold cyan]Static Site Generator for Conference Papers[/bold cyan]\n")
@@ -806,6 +807,7 @@ def generate_site(papers_dir: str, output_dir: str, landing_page: str, tech_docs
     output_path = Path(output_dir)
     landing_path = Path(landing_page)
     tech_path = Path(tech_docs)
+    custom_css_path = Path(custom_css) if custom_css else None
     
     if not papers_path.exists():
         console.print(f"[red]Error: Papers directory '{papers_dir}' does not exist[/red]")
@@ -819,7 +821,7 @@ def generate_site(papers_dir: str, output_dir: str, landing_page: str, tech_docs
     
     # Generate site (will fail if markdown files are missing)
     try:
-        generator.generate_site(landing_path, tech_path)
+        generator.generate_site(landing_path, tech_path, custom_css_path)
         console.print("\n[green]✓ Static site generated successfully![/green]")
         console.print(f"[blue]Open {output_path / 'index.html'} in your browser to view the site[/blue]")
     except FileNotFoundError as e:
