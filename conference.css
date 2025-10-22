@@ -14,17 +14,18 @@ body {
     max-width: 45em;
     margin: auto;
     padding: 3em 1em;
-    font-family: "Syne Mono", monospace;
+    font-family: "Courier New", monospace;
     font-weight: 400;
     font-style: normal;
+    filter: url('#xerox-effect');
 }
 
 h1,
 h2,
 h3 {
-    font-family: "Coral Pixels", serif;
-    font-weight: 400;
+    font-weight: 700;
     font-style: normal;
+    filter: url('#xerox-effect');
 }
 
 h1 {
