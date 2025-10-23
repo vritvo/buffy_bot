@@ -168,11 +168,17 @@ class PaperFolder:
 class StaticSiteGenerator:
     """Generates static HTML site from conference papers"""
     
-    def __init__(self, papers_dir: Path, output_dir: Path):
+    def __init__(self, papers_dir: Path, output_dir: Path, svg_file: Optional[Path] = None):
         self.papers_dir = papers_dir
         self.output_dir = output_dir
+        self.svg_file = svg_file
+        self.svg_content: Optional[str] = None
         self.papers: List[PaperFolder] = []
         self.paper_series: Dict[str, List[PaperFolder]] = {}  # Track all versions
+        
+        # Load SVG content if provided
+        if svg_file and svg_file.exists():
+            self.svg_content = svg_file.read_text()
         
     def scan_papers(self):
         """Scan papers directory and identify final accepted versions"""
@@ -930,6 +936,9 @@ footer {
                      use '../css/style.css' for pages in subdirectories)
         """
         
+        # Include SVG as first child of body if provided
+        svg_html = f"\n    {self.svg_content}" if self.svg_content else ""
+        
         return f"""<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -938,7 +947,7 @@ footer {
     <title>{title}</title>
     <link rel="stylesheet" href="{css_path}">
 </head>
-<body>
+<body>{svg_html}
     <div class="container">
         <div class="content">
             {content}
@@ -962,13 +971,15 @@ footer {
 @click.option('--landing-page', default='landing_page.md', help='Markdown file for landing page content (required, default: landing_page.md)')
 @click.option('--tech-docs', default='tech_explanation.md', help='Markdown file for technical documentation (required, default: tech_explanation.md)')
 @click.option('--custom-css', default=None, help='Optional custom CSS file to use instead of default styling')
-def generate_site(papers_dir: str, output_dir: str, landing_page: str, tech_docs: str, custom_css: str):
+@click.option('--svg-file', default=None, help='Optional SVG file to include as first child of body in each page')
+def generate_site(papers_dir: str, output_dir: str, landing_page: str, tech_docs: str, custom_css: str, svg_file: str):
     """Generate static website from conference paper folders
     
     Both landing-page and tech-docs markdown files are required.
     The generator will fail if either file is missing.
     
     Optionally provide a custom CSS file with --custom-css to override the default styling.
+    Optionally provide an SVG file with --svg-file to include as the first child of body in each page.
     """
     
     console.print("[bold cyan]Static Site Generator for Conference Papers[/bold cyan]\n")
@@ -978,13 +989,19 @@ def generate_site(papers_dir: str, output_dir: str, landing_page: str, tech_docs
     landing_path = Path(landing_page)
     tech_path = Path(tech_docs)
     custom_css_path = Path(custom_css) if custom_css else None
+    svg_path = Path(svg_file) if svg_file else None
     
     if not papers_path.exists():
         console.print(f"[red]Error: Papers directory '{papers_dir}' does not exist[/red]")
         return
     
+    # Validate SVG file if provided
+    if svg_path and not svg_path.exists():
+        console.print(f"[red]Error: SVG file not found: {svg_path}[/red]")
+        return
+    
     # Create generator
-    generator = StaticSiteGenerator(papers_path, output_path)
+    generator = StaticSiteGenerator(papers_path, output_path, svg_path)
     
     # Scan papers
     generator.scan_papers()

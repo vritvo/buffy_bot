@@ -6,6 +6,7 @@ dist/
 wheels/
 *.egg-info
 .python-version
+.DS_Store
 
 # Virtual environments
 .venv
