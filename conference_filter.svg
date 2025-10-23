@@ -1,6 +1,6 @@
 <svg style="position: absolute; width: 10; height: 10;" aria-hidden="true">
     <defs>
-        <filter id="xerox-effect">
+        <filter id="xerox-effect-headings">
             <feTurbulence
                 type="turbulence"
                 baseFrequency="0.01"
@@ -12,6 +12,19 @@
                 scale="5"
                 xChannelSelector="R"
                 yChannelSelector="G" />
-            </filter>
+        </filter>
+        <filter id="xerox-effect-body">
+            <feTurbulence
+                type="turbulence"
+                baseFrequency="0.011"
+                numOctaves="3"
+                result="turbulence" />
+            <feDisplacementMap
+                in2="turbulence"
+                in="SourceGraphic"
+                scale="1.731"
+                xChannelSelector="R"
+                yChannelSelector="G" />
+        </filter>
     </defs>
 </svg>
