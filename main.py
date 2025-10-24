@@ -2176,14 +2176,28 @@ min_rating_threshold: {min_rating}"""
         pdf_md_path = paper_folder / f"{filename_base}_for_pdf.md"
         pdf_path = paper_folder / f"{filename_base}.pdf"
         
-        # Add YAML frontmatter for pandoc
+        # Add YAML frontmatter for pandoc with custom 2x2 author grid
         yaml_header = f"""---
 title: "{title}"
-author: "Buffy Studies Research Team"
 date: "{datetime.now().strftime('%B %d, %Y')}"
 geometry: margin=1in
 fontsize: 12pt
+header-includes: |
+  \\usepackage{{array}}
 ---
+
+\\begin{{center}}
+\\begin{{tabular}}{{>{{\\centering\\arraybackslash}}p{{0.45\\textwidth}}>{{\\centering\\arraybackslash}}p{{0.45\\textwidth}}}}
+\\textbf{{Maggie Walsh, PhD}} & \\textbf{{Riley Finn}} \\\\
+\\small University of California, Sunnydale & \\small University of California, Sunnydale \\\\
+\\small \\texttt{{maggie.walsh@slayerfest.org}} & \\small \\texttt{{riley.finn@slayerfest.org}} \\\\[1em]
+\\textbf{{Forrest Gates}} & \\textbf{{Graham Miller}} \\\\
+\\small University of California, Sunnydale & \\small University of California, Sunnydale \\\\
+\\small \\texttt{{forrest.gates@slayerfest.org}} & \\small \\texttt{{graham.miller@slayerfest.org}}
+\\end{{tabular}}
+\\end{{center}}
+
+\\vspace{{1em}}
 
 """
         
@@ -4053,6 +4067,112 @@ def generate_pdf(paper_folder):
         console.print(f"[green]✓ PDF generation complete![/green]")
     except Exception as e:
         console.print(f"[red]Error generating PDF: {e}[/red]")
+
+
+@cli.command()
+@click.option('--conference', default='slayerfest_v1', help='Conference subfolder name (default: slayerfest_v1)')
+def regenerate_conference_pdfs(conference):
+    """Regenerate PDFs for all papers in a conference folder
+    
+    This command finds all paper folders in conferences/{conference}/ and regenerates
+    their PDFs with updated formatting/metadata without re-running the LLM.
+    
+    Example:
+        uv run main.py regenerate-conference-pdfs
+        uv run main.py regenerate-conference-pdfs --conference slayerfest_v2
+    """
+    claude_api_key = os.getenv('CLAUDE_API_KEY')
+    
+    if not claude_api_key:
+        console.print("[red]Error: CLAUDE_API_KEY must be set in environment variables[/red]")
+        console.print("[yellow]Add CLAUDE_API_KEY=your-api-key to your .env file[/yellow]")
+        return
+    
+    conference_path = Path("conferences") / conference
+    
+    if not conference_path.exists():
+        console.print(f"[red]Error: Conference folder not found: {conference_path}[/red]")
+        return
+    
+    # Find all subdirectories that contain paper*.md files
+    paper_folders = []
+    for item in conference_path.iterdir():
+        if item.is_dir():
+            # Check if this folder contains a paper*.md file
+            paper_files = list(item.glob("paper*.md"))
+            if paper_files:
+                paper_folders.append(item)
+    
+    if not paper_folders:
+        console.print(f"[yellow]No paper folders found in {conference_path}[/yellow]")
+        return
+    
+    console.print(f"\n[cyan]{'='*80}[/cyan]")
+    console.print(f"[cyan]Regenerating PDFs for Conference: {conference}[/cyan]")
+    console.print(f"[cyan]{'='*80}[/cyan]\n")
+    console.print(f"[blue]Found {len(paper_folders)} paper folders[/blue]")
+    console.print(f"[blue]Conference path: {conference_path}[/blue]\n")
+    
+    professor_bot = ProfessorBot(claude_api_key)
+    
+    successful = 0
+    failed = 0
+    
+    for i, paper_folder in enumerate(sorted(paper_folders), 1):
+        console.print(f"\n[yellow]({i}/{len(paper_folders)})[/yellow] Processing: [blue]{paper_folder.name}[/blue]")
+        
+        try:
+            # Find paper file
+            paper_files = list(paper_folder.glob("paper*.md"))
+            if not paper_files:
+                console.print(f"[red]  ✗ No paper file found[/red]")
+                failed += 1
+                continue
+            
+            paper_file = paper_files[0]
+            
+            # Read the paper content
+            with open(paper_file, 'r', encoding='utf-8') as f:
+                full_content = f.read()
+            
+            # Extract title from YAML frontmatter
+            title = "Untitled Paper"
+            if '---' in full_content:
+                parts = full_content.split('---', 2)
+                if len(parts) >= 2:
+                    frontmatter = parts[1]
+                    for line in frontmatter.split('\n'):
+                        if line.startswith('title:'):
+                            title = line.split('title:', 1)[1].strip().strip('"')
+                            break
+            
+            # Extract paper content (after frontmatter)
+            paper_content = full_content
+            if '---' in full_content:
+                parts = full_content.split('---', 2)
+                if len(parts) >= 3:
+                    paper_content = parts[2].strip()
+            
+            # Determine filename base
+            filename_base = paper_file.stem
+            
+            # Generate PDF
+            professor_bot._generate_pdf(paper_content, title, paper_folder, filename_base)
+            
+            console.print(f"[green]  ✓ PDF generated: {filename_base}.pdf[/green]")
+            successful += 1
+            
+        except Exception as e:
+            console.print(f"[red]  ✗ Error: {e}[/red]")
+            failed += 1
+    
+    # Summary
+    console.print(f"\n[cyan]{'='*80}[/cyan]")
+    console.print(f"[cyan]PDF Regeneration Complete[/cyan]")
+    console.print(f"[cyan]{'='*80}[/cyan]\n")
+    console.print(f"[green]Successfully generated: {successful}/{len(paper_folders)}[/green]")
+    if failed > 0:
+        console.print(f"[red]Failed: {failed}/{len(paper_folders)}[/red]")
 
 
 @cli.command()
