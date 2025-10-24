@@ -1,6 +1,6 @@
 @font-face {
     font-family: Nimbus Mono;
-    src: url('../../fonts/NimbusMono-Regular.otf');
+    src: url('../fonts/NimbusMono-Regular.otf');
     font-weight: 400;
     font-style: normal;
     font-display: block;
@@ -8,7 +8,7 @@
 
 @font-face {
     font-family: Nimbus Mono;
-    src: url('../../fonts/NimbusMono-Oblique.otf');
+    src: url('../fonts/NimbusMono-Oblique.otf');
     font-weight: 400;
     font-style: italic;
     font-display: block;
@@ -16,7 +16,7 @@
 
 @font-face {
     font-family: Nimbus Mono;
-    src: url('../../fonts/NimbusMono-Bold.otf');
+    src: url('../fonts/NimbusMono-Bold.otf');
     font-weight: 900;
     font-style: normal;
     font-display: block;
@@ -24,7 +24,7 @@
 
 @font-face {
     font-family: Nimbus Mono;
-    src: url('../../fonts/NimbusMono-BoldOblique.otf');
+    src: url('../fonts/NimbusMono-BoldOblique.otf');
     font-weight: 900;
     font-style: italic;
     font-display: block;

@@ -248,6 +248,9 @@ class StaticSiteGenerator:
         # Generate or copy CSS
         self._generate_css(custom_css)
         
+        # Copy fonts directory if it exists
+        self._copy_fonts_directory()
+        
         # Generate landing page
         self._generate_landing_page(landing_md)
         
@@ -624,6 +627,24 @@ footer {
 """
         css_path = self.output_dir / 'css' / 'style.css'
         css_path.write_text(css)
+    
+    def _copy_fonts_directory(self):
+        """Copy fonts directory to output directory if it exists"""
+        fonts_dir = Path('fonts')
+        
+        if not fonts_dir.exists():
+            console.print("[yellow]Warning: fonts directory not found, skipping font copy[/yellow]")
+            return
+        
+        output_fonts_dir = self.output_dir / 'fonts'
+        
+        if output_fonts_dir.exists():
+            # Remove existing fonts directory to ensure clean copy
+            shutil.rmtree(output_fonts_dir)
+        
+        console.print("[cyan]Copying fonts directory...[/cyan]")
+        shutil.copytree(fonts_dir, output_fonts_dir)
+        console.print(f"[green]✓ Copied fonts directory to {output_fonts_dir}[/green]")
     
     def _generate_landing_page(self, landing_md: Path):
         """Generate landing page"""
