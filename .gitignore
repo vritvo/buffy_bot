@@ -25,4 +25,5 @@ backups/
 notes
 
 # Generated site
+!docs/papers/
 conferences/
