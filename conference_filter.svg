@@ -1,6 +1,6 @@
-<svg viewBox="0 0 10 10" style="position: absolute; width: 10; height: 10;" aria-hidden="true">
+<svg style="position: absolute; width: 0; height: 0;" aria-hidden="true">
     <defs>
-        <filter id="xerox-effect-headings">
+        <filter id="xerox-effect-headings" filterUnits="userSpaceOnUse">
             <feTurbulence
                 type="turbulence"
                 baseFrequency="0.01"
@@ -13,7 +13,7 @@
                 xChannelSelector="R"
                 yChannelSelector="G" />
         </filter>
-        <filter id="xerox-effect-body">
+        <filter id="xerox-effect-body" filterUnits="userSpaceOnUse">
             <feTurbulence
                 type="turbulence"
                 baseFrequency="0.011"

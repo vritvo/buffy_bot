@@ -2183,8 +2183,10 @@ min_rating_threshold: {min_rating}"""
         pdf_scan_path = paper_folder / f"{filename_base}_scan.pdf"
         
         # Add YAML frontmatter for pandoc with custom 2x2 author grid
+        # Set author to empty list to prevent pandoc from rendering default author section
         yaml_header = f"""---
 title: "{title}"
+author: []
 date: "{datetime.now().strftime('%B %d, %Y')}"
 geometry: margin=1in
 fontsize: 12pt
@@ -4049,8 +4051,8 @@ def generate_pdf(paper_folder):
         console.print(f"[red]Error: Paper folder not found: {paper_folder}[/red]")
         return
     
-    # Find paper file
-    paper_files = list(paper_path.glob("paper*.md"))
+    # Find paper file (exclude *_for_pdf.md intermediate files)
+    paper_files = [f for f in paper_path.glob("paper*.md") if not f.name.endswith("_for_pdf.md")]
     if not paper_files:
         console.print(f"[red]Error: No paper file (paper*.md) found in {paper_folder}[/red]")
         return
@@ -4152,8 +4154,12 @@ def regenerate_conference_pdfs(conference):
         console.print(f"\n[yellow]({i}/{len(paper_folders)})[/yellow] Processing: [blue]{paper_folder.name}[/blue]")
         
         try:
-            # Find paper file
-            paper_files = list(paper_folder.glob("paper*.md"))
+            # Clean up any leftover *_for_pdf.md files from previous runs
+            for old_file in paper_folder.glob("*_for_pdf.md"):
+                old_file.unlink()
+            
+            # Find paper file (exclude *_for_pdf.md intermediate files)
+            paper_files = [f for f in paper_folder.glob("paper*.md") if not f.name.endswith("_for_pdf.md")]
             if not paper_files:
                 console.print(f"[red]  ✗ No paper file found[/red]")
                 failed += 1
