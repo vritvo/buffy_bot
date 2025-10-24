@@ -62,14 +62,14 @@ h3 {
 }
 
 h1 {
-    font-size: 72pt;
-    line-height: 72pt;
+    font-size: 60pt;
+    line-height: 60pt;
     margin: 128pt 0 72pt 0;
 }
 
 h2 {
-    font-size: 48pt;
-    line-height: 48pt;
+    font-size: 36pt;
+    line-height: 36pt;
     margin: 72pt 0 24pt 0;
 }
 
@@ -189,4 +189,38 @@ a[href*='//']:visited {
 img {
     width: 100%;
     border: var(--line-thickness) solid black;
+}
+
+.decision {
+    margin-left: 6pt;
+}
+
+.links {
+    display: flex;
+    flex-direction: column;
+    gap: 4pt;
+    align-items: flex-start;
+}
+
+.links a,
+.review-item a {
+    line-height: normal;
+}
+
+.btn {
+    display: inline-block;
+    padding: 4pt;
+}
+
+.review-item {
+    margin-bottom: 4pt;
+    background: none;
+    padding: 0;
+    border-radius: 0;
+    border-left: none;
+}
+
+.review-item a {
+    display: inline-block;
+    padding: 4pt;
 }
