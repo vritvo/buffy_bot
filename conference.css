@@ -76,6 +76,7 @@ h2 {
 h3 {
     font-size: 24pt;
     line-height: 24pt;
+    margin: 48pt 0 24pt 0;
 }
 
 h3::after {
