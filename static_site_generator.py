@@ -251,6 +251,9 @@ class StaticSiteGenerator:
         # Copy fonts directory if it exists
         self._copy_fonts_directory()
         
+        # Copy favicon directory if it exists
+        self._copy_favicon_directory()
+        
         # Generate landing page
         self._generate_landing_page(landing_md)
         
@@ -646,6 +649,41 @@ footer {
         shutil.copytree(fonts_dir, output_fonts_dir)
         console.print(f"[green]✓ Copied fonts directory to {output_fonts_dir}[/green]")
     
+    def _copy_favicon_directory(self):
+        """Copy favicon directory to output directory if it exists"""
+        favicon_dir = Path('favicon')
+        
+        if not favicon_dir.exists():
+            console.print("[yellow]Warning: favicon directory not found, skipping favicon copy[/yellow]")
+            return
+        
+        output_favicon_dir = self.output_dir / 'favicon'
+        
+        if output_favicon_dir.exists():
+            # Remove existing favicon directory to ensure clean copy
+            shutil.rmtree(output_favicon_dir)
+        
+        console.print("[cyan]Copying favicon directory...[/cyan]")
+        shutil.copytree(favicon_dir, output_favicon_dir)
+        
+        # Update site.webmanifest to use correct paths
+        manifest_path = output_favicon_dir / 'site.webmanifest'
+        if manifest_path.exists():
+            import json as json_module
+            with open(manifest_path, 'r') as f:
+                manifest = json_module.load(f)
+            
+            # Update icon paths to be relative to the favicon directory
+            if 'icons' in manifest:
+                for icon in manifest['icons']:
+                    if 'src' in icon and icon['src'].startswith('/'):
+                        icon['src'] = 'favicon' + icon['src']
+            
+            with open(manifest_path, 'w') as f:
+                json_module.dump(manifest, f, indent=2)
+        
+        console.print(f"[green]✓ Copied favicon directory to {output_favicon_dir}[/green]")
+    
     def _generate_landing_page(self, landing_md: Path):
         """Generate landing page"""
         console.print("[cyan]Generating landing page...[/cyan]")
@@ -965,6 +1003,10 @@ footer {
         # Include SVG as first child of body if provided
         svg_html = f"\n    {self.svg_content}" if self.svg_content else ""
         
+        # Determine favicon path based on css_path depth
+        # If css_path starts with '../', we're in a subdirectory
+        favicon_base = "../favicon" if css_path.startswith("../") else "favicon"
+        
         return f"""<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -972,6 +1014,10 @@ footer {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{title}</title>
     <link rel="stylesheet" href="{css_path}">
+    <link rel="apple-touch-icon" sizes="180x180" href="{favicon_base}/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="{favicon_base}/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="{favicon_base}/favicon-16x16.png">
+    <link rel="manifest" href="{favicon_base}/site.webmanifest">
 </head>
 <body>{svg_html}
     <div class="container">
