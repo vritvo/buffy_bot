@@ -67,9 +67,14 @@ class PaperFolder:
         return None
     
     def _find_paper_pdf(self) -> Optional[Path]:
-        """Find the paper PDF file"""
-        matches = list(self.path.glob('paper*.pdf')) + list(self.path.glob('*.pdf'))
-        return matches[0] if matches else None
+        """Find the paper PDF file (prioritize scanned versions ending in _scan.pdf)"""
+        # First, try to find scanned PDFs (aged versions)
+        scan_matches = list(self.path.glob('*_scan.pdf'))
+        if scan_matches:
+            return scan_matches[0]
+        
+        # If no scanned PDFs found, return None (only use scanned versions for the conference site)
+        return None
     
     def _find_reviews(self) -> List[Path]:
         """Find all review JSON files"""

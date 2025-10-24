@@ -2146,15 +2146,20 @@ min_rating_threshold: {min_rating}"""
         # Generate PDF from the paper content
         self._generate_pdf(content, topic, paper_folder, filename_base)
         
+        # Log completion of paper processing
+        console.print(f"\n[cyan]{'='*80}[/cyan]")
+        console.print(f"[cyan]✓ PAPER PROCESSING COMPLETE: {topic}[/cyan]")
+        console.print(f"[cyan]{'='*80}[/cyan]\n")
+        
         return output_path
     
     def _generate_pdf(self, content: str, title: str, paper_folder: Path, filename_base: str):
-        """Generate a PDF version of the paper using pandoc
+        """Generate PDF versions of the paper using pandoc (both original and aged scan)
         
         Args:
             content: Raw paper content from LLM (may include scratchpad tags)
             title: Paper title
-            paper_folder: Folder to save PDF in
+            paper_folder: Folder to save PDFs in
             filename_base: Base filename (e.g., "paper" or "paper_final2")
         """
         import subprocess
@@ -2175,6 +2180,7 @@ min_rating_threshold: {min_rating}"""
         # Create a clean markdown file for PDF generation
         pdf_md_path = paper_folder / f"{filename_base}_for_pdf.md"
         pdf_path = paper_folder / f"{filename_base}.pdf"
+        pdf_scan_path = paper_folder / f"{filename_base}_scan.pdf"
         
         # Add YAML frontmatter for pandoc with custom 2x2 author grid
         yaml_header = f"""---
@@ -2225,7 +2231,7 @@ header-includes: |
                     args.extend(extra_args)
                     
                     subprocess.run(args, check=True, capture_output=True, text=True, env=env)
-                    console.print(f"[green]✓ PDF generated using {engine}: {pdf_path}[/green]")
+                    console.print(f"[green]✓ Original PDF generated using {engine}: {pdf_path}[/green]")
                     pdf_generated = True
                     break
                 except subprocess.CalledProcessError as e:
@@ -2279,6 +2285,30 @@ header-includes: |
                     # PDF engine exists but failed - this is an error we should surface
                     console.print(f"[red]Error: PDF generation failed despite having PDF engines installed[/red]")
                     console.print(f"[yellow]This may be a temporary issue. The markdown file is still saved.[/yellow]")
+            
+            # If PDF was generated successfully, create the aged "scan" version
+            if pdf_generated and pdf_path.exists():
+                console.print(f"[blue]Creating aged scan version...[/blue]")
+                try:
+                    # Run the age_pdf.sh script
+                    age_script = Path(__file__).parent / "age_pdf.sh"
+                    if not age_script.exists():
+                        console.print(f"[yellow]Warning: age_pdf.sh not found at {age_script}, skipping scan generation[/yellow]")
+                    else:
+                        subprocess.run(
+                            ['bash', str(age_script), str(pdf_path), str(pdf_scan_path)],
+                            check=True,
+                            capture_output=True,
+                            text=True,
+                            env=env
+                        )
+                        console.print(f"[green]✓ Aged scan PDF generated: {pdf_scan_path}[/green]")
+                except subprocess.CalledProcessError as e:
+                    console.print(f"[yellow]Warning: Failed to create aged scan PDF[/yellow]")
+                    if e.stderr:
+                        console.print(f"[dim]Error: {e.stderr[:200]}[/dim]")
+                except Exception as e:
+                    console.print(f"[yellow]Warning: Unexpected error creating aged scan: {e}[/yellow]")
             
             # Clean up the intermediate markdown file
             if pdf_md_path.exists():
@@ -4156,10 +4186,16 @@ def regenerate_conference_pdfs(conference):
             # Determine filename base
             filename_base = paper_file.stem
             
-            # Generate PDF
+            # Generate PDFs (both original and aged scan)
             professor_bot._generate_pdf(paper_content, title, paper_folder, filename_base)
             
-            console.print(f"[green]  ✓ PDF generated: {filename_base}.pdf[/green]")
+            console.print(f"[green]  ✓ PDFs generated: {filename_base}.pdf and {filename_base}_scan.pdf[/green]")
+            
+            # Log completion of paper processing
+            console.print(f"\n[cyan]{'='*80}[/cyan]")
+            console.print(f"[cyan]✓ PAPER {i}/{len(paper_folders)} COMPLETE: {title}[/cyan]")
+            console.print(f"[cyan]{'='*80}[/cyan]\n")
+            
             successful += 1
             
         except Exception as e:
