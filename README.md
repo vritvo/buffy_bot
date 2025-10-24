@@ -60,6 +60,15 @@ CLAUDE_API_KEY=your-claude-api-key
 
 See "How It Works" section above for the main workflows. All commands use the most recent grad notes folder by default, or you can specify with `--notes-folder`.
 
+### `regenerate-conference-pdfs`
+Regenerate PDFs for all papers in a conference folder):
+```bash
+# Regenerate all PDFs in slayerfest_v1 (default)
+uv run main.py regenerate-conference-pdfs
+
+# Regenerate all PDFs in a different conference
+uv run main.py regenerate-conference-pdfs --conference slayerfest_v2
+```
 ### `static-site-generator`
 Generate a static website from conference paper folders:
 ```bash
