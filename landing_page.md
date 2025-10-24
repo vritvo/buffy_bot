@@ -2,7 +2,7 @@
 
 ## In every generation there is a conference.
 
-**May 16-18, 2003 | Sunnydale Community College, Sunnydale, CA**
+**May 16-18, 2003 | University of California, Sunnydale, CA**
 
 ## About Slayerfest '03
 
