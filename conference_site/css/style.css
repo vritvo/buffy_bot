@@ -1,0 +1,227 @@
+@font-face {
+    font-family: Nimbus Mono;
+    src: url('../../fonts/NimbusMono-Regular.otf');
+    font-weight: 400;
+    font-style: normal;
+    font-display: block;
+}
+
+@font-face {
+    font-family: Nimbus Mono;
+    src: url('../../fonts/NimbusMono-Oblique.otf');
+    font-weight: 400;
+    font-style: italic;
+    font-display: block;
+}
+
+@font-face {
+    font-family: Nimbus Mono;
+    src: url('../../fonts/NimbusMono-Bold.otf');
+    font-weight: 900;
+    font-style: normal;
+    font-display: block;
+}
+
+@font-face {
+    font-family: Nimbus Mono;
+    src: url('../../fonts/NimbusMono-BoldOblique.otf');
+    font-weight: 900;
+    font-style: italic;
+    font-display: block;
+}
+
+:root {
+    --color-yellow: #ffe100;
+    --line-thickness: 2pt;
+}
+
+html {
+    scroll-behavior: smooth;
+}
+
+body {
+    font-size: 12pt;
+    max-width: 45em;
+    margin: auto;
+    padding: 3em 1em;
+    font-family: "Nimbus Mono", monospace;
+    font-weight: 400;
+    font-style: normal;
+    filter: url('#xerox-effect-body');
+}
+
+h1, h2 {
+    filter: url('#xerox-effect-headings');
+}
+
+h1,
+h2,
+h3 {
+    font-weight: 700;
+    font-style: normal;
+}
+
+h1 {
+    font-size: 60pt;
+    line-height: 60pt;
+    margin: 128pt 0 72pt 0;
+}
+
+h2 {
+    font-size: 36pt;
+    line-height: 36pt;
+    margin: 72pt 0 24pt 0;
+}
+
+h3 {
+    font-size: 24pt;
+    line-height: 24pt;
+    margin: 48pt 0 24pt 0;
+}
+
+h3::after {
+    content: '';
+    flex: 1;
+    margin-left: 1rem;
+    height: var(--line-thickness);
+    background-color: black;
+}
+
+h1,
+h2,
+h3,
+ul {
+    text-wrap: balance;
+}
+
+p,
+li,
+h3,
+blockquote,
+div {
+    line-height: 24pt;
+}
+
+code {
+    font-family: monospace;
+    font-optical-sizing: auto;
+    font-style: normal;
+    font-weight: 700;
+    text-transform: none;
+}
+
+pre {
+    margin: 0 0 24pt 0;
+    border: var(--line-thickness) solid black;
+    padding: 12pt;
+    white-space: pre;
+    overflow-x: auto;
+    overflow-y: hidden;
+    max-width: 100%;
+}
+
+pre code {
+    line-height: 12pt;
+    font-weight: 300;
+    font-variation-settings: "MONO" 1;
+}
+
+p,
+ul,
+img {
+    margin: 0 0 24pt 0;
+}
+
+ul {
+    padding-left: 24pt;
+    list-style-type: square;
+}
+
+strong {
+    font-weight: 700;
+}
+
+blockquote {
+    margin: 0 0 24pt 24pt;
+}
+
+footer {
+    margin: 48pt 0 24pt 0;
+    font-style: italic;
+    color: #666;
+}
+
+a,
+a:visited {
+    color: unset;
+}
+
+a:not([href*='//']),
+a:not([href*='//']):visited {
+    text-decoration: none;
+    background-color: black;
+    color: #ddd;
+    padding: 4pt;
+    /* to keep the padding consistent for line breaks: */
+    -webkit-box-decoration-break: clone;
+    box-decoration-break: clone;
+
+    &:hover,
+    &:active {
+        background-color: var(--color-yellow);
+        color: black;
+    }
+}
+
+a[href*='//'],
+a[href*='//']:visited {
+    padding: 4pt 0;
+    text-decoration-thickness: var(--line-thickness);
+    text-underline-offset: 4pt;
+
+    &:hover,
+    &:active {
+        text-decoration: none;
+        color: black;
+        background-color: var(--color-yellow);
+    }
+}
+
+img {
+    width: 100%;
+    border: var(--line-thickness) solid black;
+}
+
+.decision {
+    margin-left: 6pt;
+}
+
+.links {
+    display: flex;
+    flex-direction: column;
+    gap: 4pt;
+    align-items: flex-start;
+}
+
+.links a,
+.review-item a {
+    line-height: normal;
+}
+
+.btn {
+    display: inline-block;
+    padding: 4pt;
+}
+
+.review-item {
+    margin-bottom: 4pt;
+    background: none;
+    padding: 0;
+    border-radius: 0;
+    border-left: none;
+}
+
+.review-item a {
+    display: inline-block;
+    padding: 4pt;
+}
