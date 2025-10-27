@@ -312,3 +312,8 @@ a.glitch-text:active {
         opacity: 0.3;
     }
 }
+
+a.glitch-text:hover, a.glitch-text:active {
+    background-color: #fff !important;
+    filter: invert(1);
+}
