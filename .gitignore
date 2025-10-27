@@ -27,3 +27,7 @@ notes
 # Generated site
 !docs/papers/
 conferences/
+
+# Terminal recordings
+*.cast 
+conference_run.gif
