@@ -47,11 +47,28 @@ body {
     font-family: "Nimbus Mono", monospace;
     font-weight: 400;
     font-style: normal;
-    filter: url('#xerox-effect-body');
 }
 
-h1, h2 {
-    filter: url('#xerox-effect-headings');
+@media (min-resolution: 1dppx) {
+    body {
+        filter: url('#xerox-effect-body-lowres');
+    }
+
+    h1,
+    h2 {
+        filter: url('#xerox-effect-headings-lowres');
+    }
+}
+
+@media (min-resolution: 2dppx) {
+    body {
+        filter: url('#xerox-effect-body-highres');
+    }
+
+    h1,
+    h2 {
+        filter: url('#xerox-effect-headings-highres');
+    }
 }
 
 h1,

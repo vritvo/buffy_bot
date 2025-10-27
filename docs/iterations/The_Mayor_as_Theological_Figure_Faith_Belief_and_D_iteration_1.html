@@ -13,7 +13,7 @@
 <body>
     <svg style="position: absolute; width: 0; height: 0;" aria-hidden="true">
     <defs>
-        <filter id="xerox-effect-headings" filterUnits="userSpaceOnUse">
+        <filter id="xerox-effect-headings-highres" filterUnits="userSpaceOnUse">
             <feTurbulence
                 type="turbulence"
                 baseFrequency="0.01"
@@ -26,16 +26,42 @@
                 xChannelSelector="R"
                 yChannelSelector="G" />
         </filter>
-        <filter id="xerox-effect-body" filterUnits="userSpaceOnUse">
+        <filter id="xerox-effect-body-highres" filterUnits="userSpaceOnUse">
             <feTurbulence
                 type="turbulence"
-                baseFrequency="0.011"
+                baseFrequency="0.08"
                 numOctaves="3"
                 result="turbulence" />
             <feDisplacementMap
                 in2="turbulence"
                 in="SourceGraphic"
-                scale="1.731"
+                scale="1.831"
+                xChannelSelector="R"
+                yChannelSelector="G" />
+        </filter>
+        <filter id="xerox-effect-headings-lowres" filterUnits="userSpaceOnUse">
+            <feTurbulence
+                type="turbulence"
+                baseFrequency="0.01"
+                numOctaves="4"
+                result="turbulence" />
+            <feDisplacementMap
+                in2="turbulence"
+                in="SourceGraphic"
+                scale="5"
+                xChannelSelector="R"
+                yChannelSelector="G" />
+        </filter>
+        <filter id="xerox-effect-body-lowres" filterUnits="userSpaceOnUse">
+            <feTurbulence
+                type="turbulence"
+                baseFrequency="0.22"
+                numOctaves="3"
+                result="turbulence" />
+            <feDisplacementMap
+                in2="turbulence"
+                in="SourceGraphic"
+                scale="1.1931"
                 xChannelSelector="R"
                 yChannelSelector="G" />
         </filter>
