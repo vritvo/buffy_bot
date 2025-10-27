@@ -66,6 +66,7 @@ The generator creates:
 **Technical Documentation (`technical_documentation.html`)**
 - Renders your tech documentation markdown as HTML
 - Includes syntax highlighting for code blocks
+- Displays conference run GIF at the bottom if available
 
 **Paper Pages (`papers/*.html`)**
 - Full paper abstract
@@ -121,6 +122,29 @@ Your custom CSS file should define all the necessary classes and styles. Key cla
 
 The generator will copy your CSS file to `conference_site/css/style.css` and all pages will use it.
 
+### Adding a Conference Run GIF
+
+You can add an animated GIF showing a conference run to the Technical Documentation page:
+
+1. **Create or convert your recording to GIF:**
+   ```bash
+   # If you have a .cast file from asciinema, you can convert it using agg or similar tools
+   # Or use any screen recording converted to GIF
+   ```
+
+2. **Place the GIF:**
+   ```
+   docs/gifs/conference_run.gif   # Or gifs/conference_run.gif at project root
+   ```
+
+3. **Generate the site:**
+   The static site generator will automatically:
+   - Copy the `gifs/` directory to the output
+   - Display `conference_run.gif` at the bottom of the Technical Documentation page
+   - Style it with a subtle border and shadow
+
+The GIF will appear centered below your technical documentation content with responsive sizing.
+
 ## Output Structure
 
 ```
@@ -129,14 +153,18 @@ conference_site/
 ├── technical_documentation.html # Tech docs
 ├── css/
 │   └── style.css              # Responsive styles
+├── gifs/                       # Animated GIFs (if present)
+│   └── conference_run.gif
 ├── papers/                     # One page per paper
 │   ├── 20251021_014943_Spikes_Journey_*.html
 │   └── ...
-├── reviews/                    # One page per review
-│   ├── 20251021_014943_*_reviewer1.html
+├── iterations/                 # One page per iteration
+│   ├── *_iteration_1.html
 │   └── ...
-└── pdfs/                       # Paper PDFs
-    ├── 20251021_014943_Spikes_Journey_*.pdf
+├── pdfs/                       # Paper PDFs
+│   ├── 20251021_014943_Spikes_Journey_*.pdf
+│   └── ...
+└── fonts/                      # Custom fonts (if present)
     └── ...
 ```
 

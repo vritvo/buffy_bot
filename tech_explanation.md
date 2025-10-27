@@ -1,114 +1,57 @@
 # Technical Documentation
+## About the Slayerfest / Buffy Bot System
 
-## About the Buffy Bot System
+Slayerfest is a fully automated conference made up of fully automated academic labs — staffed entirely by AI bots — dedicated to interpreting private conversations about Buffy the Vampire Slayer and turning them into "publishable" scholarship.
 
-The Buffy Bot is an AI-powered conversation analysis and academic paper generation system. It extracts discussions about *Buffy the Vampire Slayer* from Zulip chat logs and generates academic papers using a multi-agent AI workflow.
+The driving philosophy was:
 
-## System Architecture
-
-### 1. Conversation Extraction
-
-The system extracts private conversations from Zulip and optionally breaks them into weekly chunks for detailed analysis.
-
-```bash
-uv run main.py extract-private --limit 10000 --weekly-chunks
+```
+If there’s a problem…
+add another bot.
 ```
 
-### 2. Graduate Bot Analysis
+Our source material: thousands of lines of Buffy-theorizing from a real chat log.
 
-Graduate-level AI agents analyze the weekly conversation chunks, identifying key themes, philosophical concepts, and noteworthy observations.
+Our goal: remove the humans who wrote those messages from the interpretive process — entirely. Except as raw data.
 
-```bash
-uv run main.py run-grad-bots --weekly-dir "conversations/weekly"
-```
 
-### 3. Research Bot
+## System Architecture - The Bureaucracy of an AI Academic Lab
 
-The researcher bot synthesizes the graduate notes to propose 5-8 compelling paper topics, each with:
-- A detailed abstract
-- Evidence assessment (0-100 rating)
-- Key episode references
-- Novelty evaluation
+### Step 1 - The Grad Bots
+Each grad bot reads one week of conversation and writes a sober academic summary, blissfully unaware of any thesis or purpose. They produce field notes, not arguments.
 
-```bash
-uv run main.py researcher-bot
-```
 
-### 4. Conference Simulation
+### Step 2 - Postdoc Bots
+The postdocs are more ambitious. They receive the grad bots’ notes and a thesis statement. Their task is to rate each week’s relevance (0–100).
 
-The `run-conference` command fully automates the academic lifecycle:
+Scores >30/100: the week’s summary is sent to the professor.
 
-```bash
-uv run main.py run-conference
-```
+Scores >80/100: the verbatim transcripts go to the professor (we do have a context window to worry about)
 
-This command:
-- Generates papers for all highly-rated abstracts
-- Reviews each paper with multiple AI peer reviewers
-- Rewrites papers based on feedback
-- Continues revision cycles until all reviews are ACCEPT
-- Features realistic academic filename chaos (paper_copy1_FINAL2.md, etc.)
-- Includes acceptance bias that increases with longer filenames (simulating academic reality)
+You might think this lab would never hit the context window with this process. You’d be wrong.
 
-## Paper Generation Pipeline
+### Step 3 - Research Assistant bots
+Reads the thesis and finds the most thematically relevant Buffy episodes. Their scripts are added to the reading pile.
 
-### Postdoc Bot
-Rates each weekly note for relevance to the paper topic (0-100 scale). Only weeks meeting the threshold are included.
+### Step 4 - Professor Bot
 
-### Research Assistant
-Selects the most relevant episode scripts based on the topic and conversation analysis.
+At last, the professor. Given the postdocs’ selections of grad student summaries and ver batim chats, as well as the the RA’s episodes, the professor composes an academic paper. It is authoritative, theoretical, and unbothered by the fact that its “sources” are two people texting about Buffy.
 
-### Professor Bot
-Writes the academic paper using:
-- Filtered weekly notes (or verbatim transcripts for highly relevant weeks)
-- Selected episode scripts
-- Theoretical frameworks appropriate to the topic
+Why send both summaries and transcripts? It’s partly a context-window optimization. And partly because academic redundancy is a sacred institution.
 
-## Output Structure
+## The Autonomous Research Cycle
 
-Each paper folder contains:
-- `paper.md` / `paper_final1.md` - The paper in Markdown format
-- `paper.pdf` / `paper_final1.pdf` - PDF version
-- `postdoc_ratings.json` - Relevance ratings for each week
-- `reviews/` - Peer review JSON files
-- `scripts/` - Episode script files used
+This would have been enough — but it still required a human to provide the thesis. So we removed the humans.
 
-Revised papers get version suffixes (`_v2`, `_v2_v2`) and accumulate increasingly chaotic filenames.
+### Researcher Bot 
+Before any lab kicks off, a researcher bot reads the chats and proposes abstract ideas and potential papers. Each abstract enters the full academic pipeline above.
 
-## Configuration
+### Peer Review Bot
+When each paper generation process finishes, the paper is submitted to multiple Peer Reviewer Bots for review. If rejected, it returns to the lab, where the professor must revise it using the reviewer’s comments.
 
-Key parameters are configurable in `prompts.toml`:
-- `max_weeks_for_paper` - Maximum weeks to include (default: 8)
-- Agent prompts and system messages
-- Review criteria and standards
+This continues until all papers are accepted — at which point the conference is considered complete.
 
-## Technologies Used
+## Watch a Recording of a Conference
+The typical runtime of a conference is about 5 hours for 8 papers. We manage the 30k token/minute rate limit by consistently pausing for 60 seconds between submissions when necessary (the grad students need to get some rest at some point, after all). 
 
-- **Claude Sonnet 4**: All AI agents use Claude for text generation
-- **Python**: Core system implementation
-- **uv**: Dependency management
-- **Rich**: Terminal UI
-- **Markdown & PDF**: Paper output formats
-- **Zulip API**: Conversation extraction
-
-## Static Site Generation
-
-This website was generated using `static_site_generator.py`, which:
-- Scans all paper folders in the `papers/` directory
-- Identifies the final accepted version of each paper series
-- Generates responsive HTML pages with embedded CSS
-- Creates individual pages for papers and reviews
-- Copies PDFs for download
-
-```bash
-uv run static_site_generator.py --papers-dir papers --output-dir conference_site
-```
-
-## Source Code
-
-The complete source code is available in the project repository. Key files:
-- `main.py` - Core CLI and agent orchestration
-- `prompts.toml` - Agent prompts and configuration
-- `static_site_generator.py` - Website generation
-- `grad_bot_logger.py` - Logging utilities
-
+Below is a sped up replay of a Slayerfest conference, with all the idle waiting cut out. It runs less than 5 minutes. 

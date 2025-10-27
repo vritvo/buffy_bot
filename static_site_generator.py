@@ -254,6 +254,9 @@ class StaticSiteGenerator:
         # Copy favicon directory if it exists
         self._copy_favicon_directory()
         
+        # Copy gifs directory if it exists
+        self._copy_gifs_directory()
+        
         # Generate landing page
         self._generate_landing_page(landing_md)
         
@@ -684,6 +687,33 @@ footer {
         
         console.print(f"[green]✓ Copied favicon directory to {output_favicon_dir}[/green]")
     
+    def _copy_gifs_directory(self):
+        """Copy gifs directory to output directory if it exists"""
+        # First check in docs/gifs
+        gifs_dir = Path('docs/gifs')
+        
+        if not gifs_dir.exists():
+            # Fall back to gifs directory at root
+            gifs_dir = Path('gifs')
+            if not gifs_dir.exists():
+                console.print("[yellow]Warning: gifs directory not found, skipping gifs copy[/yellow]")
+                return
+        
+        output_gifs_dir = self.output_dir / 'gifs'
+        
+        # Skip if source and destination are the same
+        if gifs_dir.resolve() == output_gifs_dir.resolve():
+            console.print("[yellow]Skipping gifs directory (already in output directory)[/yellow]")
+            return
+        
+        if output_gifs_dir.exists():
+            # Remove existing gifs directory to ensure clean copy
+            shutil.rmtree(output_gifs_dir)
+        
+        console.print("[cyan]Copying gifs directory...[/cyan]")
+        shutil.copytree(gifs_dir, output_gifs_dir)
+        console.print(f"[green]✓ Copied gifs directory to {output_gifs_dir}[/green]")
+    
     def _generate_landing_page(self, landing_md: Path):
         """Generate landing page"""
         console.print("[cyan]Generating landing page...[/cyan]")
@@ -732,12 +762,26 @@ footer {
         
         content = markdown.markdown(tech_md.read_text(), extensions=['fenced_code', 'tables'])
         
+        # Check if conference GIF exists
+        gif_html = ""
+        gif_path = Path('docs/gifs/conference_run.gif')
+        if not gif_path.exists():
+            gif_path = Path('gifs/conference_run.gif')
+        
+        if gif_path.exists():
+            gif_html = """
+            <div style="margin-top: 40px; text-align: center;">
+                <img src="gifs/conference_run.gif" alt="Conference Run Recording" style="max-width: 100%; border: 1px solid #ddd; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
+            </div>
+            """
+        
         html = self._wrap_html(
             title="Technical Documentation",
             content=f"""
             <div class="markdown-content">
                 {content}
             </div>
+            {gif_html}
             <div class="links">
                 <a href="index.html" class="btn secondary">← Back to Conference</a>
             </div>
