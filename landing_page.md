@@ -6,11 +6,12 @@
 
 ## About Slayerfest '03
 
-For seven seasons, _Buffy_ has offered more than monster-of-the-week entertainment. It has staged fundamental questions about existential responsibility, the construction of feminine heroism, and the unconscious forces that shape identity and desire. This conference celebrated a series that transformed the teenage girl from object of the gaze into philosophical subject—one who confronts death, choice, and the burden of consciousness with remarkable sophistication.
+For seven seasons, _Buffy_ has offered more than monster-of-the-week entertainment. It has staged fundamental questions about existential responsibility, the construction of feminine heroism, and the unconscious forces that shape identity and desire. Slayerfest '03 brought together leading scholars to interrogate these themes with the seriousness they deserve.
 
-The work of interpretation has only begun. Slayerfest '03 established a foundation for what we hope will become an ongoing tradition of serious philosophical and psychoanalytic engagement with popular culture that refuses to condescend to its subject matter.
+Yet the work of interpretation has only begun. Through philosophy, psychoanalysis, and feminist theory, this inaugural gathering established a foundation for a tradition of analysis that refuses to condescend to its subject matter. Even as the end of the world remains a recurring threat, our scholarship is structured to endure it.
 
-Thank you to all presenters, reviewers, and attendees who made this gathering possible. The Slayer may have wielded the stake, but we're armed with Nietzsche, Freud, and Wittgenstein.
+The papers archived here represent the best of that work: rigorously reviewed, carefully revised, and ultimately accepted into the official proceedings. We extend sincere gratitude to all presenters, reviewers, administrative procedures, and unseen labor that made this conference possible.
+
 
 _"The hardest thing in this world is to live in it."_ — Buffy Summers
 
@@ -22,7 +23,7 @@ This site preserves the accepted papers from Slayerfest '03, which centered on t
 - **Feminist Theory**: The feminine hero and rejection of passivity, power feminism versus victim feminism in the Buffyverse, queer theory and non-normative desire, intersections of gender and monstrosity
 - **Psychoanalysis**: Desire and the death drive in vampire mythology, the unconscious of the Hellmouth, Oedipal structures and chosen families, trauma, repression, and the return of the repressed
 
-Each paper underwent blind peer review by conference committee members and has been preserved here with full abstracts and reviewer feedback.
+Each paper underwent a blind peer review by conference committee members. Full Revision history remains intact — in the interest of transparency in scholarly process.
 
 ## Explore the Papers
 
