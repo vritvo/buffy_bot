@@ -49,25 +49,30 @@ body {
     font-style: normal;
 }
 
-@media (min-resolution: 1dppx) {
-    body {
-        filter: url('#xerox-effect-body-lowres');
-    }
+@media (pointer: fine) and (hover: hover) {
+    @supports (not (-webkit-hyphens: none)) {
 
-    h1,
-    h2 {
-        filter: url('#xerox-effect-headings-lowres');
-    }
-}
+        @media (min-resolution: 1dppx) {
+            body {
+                filter: url('#xerox-effect-body-lowres');
+            }
 
-@media (min-resolution: 2dppx) {
-    body {
-        filter: url('#xerox-effect-body-highres');
-    }
+            h1,
+            h2 {
+                filter: url('#xerox-effect-headings-lowres');
+            }
+        }
 
-    h1,
-    h2 {
-        filter: url('#xerox-effect-headings-highres');
+        @media (min-resolution: 2dppx) {
+            body {
+                filter: url('#xerox-effect-body-highres');
+            }
+
+            h1,
+            h2 {
+                filter: url('#xerox-effect-headings-highres');
+            }
+        }
     }
 }
 

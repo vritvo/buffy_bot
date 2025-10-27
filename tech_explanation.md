@@ -1,5 +1,4 @@
-# Technical Documentation
-## About the Slayerfest / Buffy Bot System
+# About the Slayerfest / Buffy Bot System
 
 Slayerfest is a fully automated conference made up of fully automated academic labs — staffed entirely by AI bots — dedicated to interpreting private conversations about Buffy the Vampire Slayer and turning them into "publishable" scholarship.
 
