@@ -10,12 +10,12 @@ For seven seasons, _Buffy_ has offered more than monster-of-the-week entertainme
 
 Yet the work of interpretation has only begun. Through philosophy, psychoanalysis, and feminist theory, this inaugural gathering established a foundation for a tradition of analysis that refuses to condescend to its subject matter. Even as the end of the world remains a recurring threat, our scholarship is structured to endure it.
 
-The papers archived here represent the best of that work: rigorously reviewed, carefully revised, and ultimately accepted into the official proceedings. We extend sincere gratitude to all presenters, reviewers, administrative procedures, and unseen labor that made this conference possible.
+The papers archived here represent the best of that work: rigorously reviewed, carefully revised, and ultimately accepted into the official proceedings. We extend sincere gratitude to all presenters, reviewers, administrative procedures, and ~~unseen labor~~ that made this conference possible.
 
 
 _"The hardest thing in this world is to live in it."_ — Buffy Summers
 
-_"The second hardest thing is convincing an army of bots to host a Buffy conference."_ — Buffy Bot
+_"The second hardest thing is convincing an ~~army of bots~~ to host a Buffy conference."_ — ~~Buffy Bot~~
 
 ## Proceedings Archive
 

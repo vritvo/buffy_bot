@@ -247,3 +247,68 @@ img {
     display: inline-block;
     padding: 4pt;
 }
+
+.glitch-text {
+    position: relative;
+    animation: flicker var(--flicker-duration, 7s) infinite alternate, shift var(--shift-duration, 11s) infinite alternate;
+    animation-delay: var(--delay, 0s), var(--delay, 0s);
+}
+
+a.glitch-text,
+a.glitch-text:visited {
+    color: inherit;
+    text-decoration: none;
+    background-color: transparent;
+    padding: 0;
+}
+
+a.glitch-text:hover,
+a.glitch-text:active {
+    color: inherit;
+    background-color: transparent;
+}
+
+@keyframes shift {
+    0%,
+    5%,
+    18%,
+    23%,
+    31%,
+    69%,
+    93% {
+        text-shadow: 2px 0 #00000000, -2px 0 #00000000;
+    }
+
+    6%,
+    17%,
+    24%,
+    30%,
+    70%,
+    91% {
+        text-shadow: 2px 0 #ff00ff, -2px 0 #3afdfd;
+    }
+}
+
+@keyframes flicker {
+
+    0%,
+    16%,
+    18%,
+    32%,
+    34%,
+    88%,
+    90%,
+    92%,
+    98%,
+    100% {
+        opacity: 1;
+    }
+
+    17%,
+    33%,
+    89%,
+    91%,
+    99% {
+        opacity: 0.3;
+    }
+}

@@ -16,8 +16,51 @@ import click
 from rich.console import Console
 import shutil
 import markdown
+from markdown.inlinepatterns import InlineProcessor
+from markdown.extensions import Extension
+import xml.etree.ElementTree as etree
+import random
 
 console = Console()
+
+
+class GlitchTextInlineProcessor(InlineProcessor):
+    """Inline processor to convert ~~text~~ to <a class="glitch-text">text</a>"""
+    
+    def __init__(self, pattern, md, base_path=''):
+        super().__init__(pattern, md)
+        self.base_path = base_path
+    
+    def handleMatch(self, m, data):
+        el = etree.Element('a')
+        el.set('class', 'glitch-text')
+        # Set href to technical documentation page
+        tech_page = f'{self.base_path}technical_documentation.html'
+        el.set('href', tech_page)
+        # Add random delay between 0.1s and 0.9s
+        delay = random.uniform(0.1, 0.9)
+        # Add random flicker duration between 7s and 11s
+        flicker_duration = random.uniform(7.0, 11.0)
+        # Add random shift duration between 9s and 13s
+        shift_duration = random.uniform(9.0, 13.0)
+        el.set('style', f'--delay: {delay:.2f}s; --flicker-duration: {flicker_duration:.2f}s; --shift-duration: {shift_duration:.2f}s')
+        el.text = m.group(1)
+        return el, m.start(0), m.end(0)
+
+
+class GlitchTextExtension(Extension):
+    """Extension to add GlitchTextInlineProcessor to markdown"""
+    
+    def __init__(self, base_path=''):
+        super().__init__()
+        self.base_path = base_path
+    
+    def extendMarkdown(self, md):
+        # Pattern matches ~~text~~ 
+        GLITCH_PATTERN = r'~~(.*?)~~'
+        glitch_pattern = GlitchTextInlineProcessor(GLITCH_PATTERN, md, self.base_path)
+        # Register with high priority to process before other patterns
+        md.inlinePatterns.register(glitch_pattern, 'glitch_text', 175)
 
 
 class PaperFolder:
@@ -719,7 +762,7 @@ footer {
         console.print("[cyan]Generating landing page...[/cyan]")
         
         # Read landing page content and convert to HTML
-        landing_content = markdown.markdown(landing_md.read_text())
+        landing_content = markdown.markdown(landing_md.read_text(), extensions=[GlitchTextExtension()])
         
         # Insert "Read more" link to technical documentation after first paragraph
         # Split content into paragraphs and insert link after first </p>
@@ -732,7 +775,7 @@ footer {
         papers_html = '<div class="paper-grid">'
         for paper in self.papers:
             # Convert abstract markdown to HTML
-            abstract_html = markdown.markdown(paper.abstract)
+            abstract_html = markdown.markdown(paper.abstract, extensions=[GlitchTextExtension()])
             papers_html += f"""
             <div class="paper-card">
                 <h3>{paper.title}</h3>
@@ -760,7 +803,7 @@ footer {
         """Generate technical documentation page"""
         console.print("[cyan]Generating technical documentation...[/cyan]")
         
-        content = markdown.markdown(tech_md.read_text(), extensions=['fenced_code', 'tables'])
+        content = markdown.markdown(tech_md.read_text(), extensions=['fenced_code', 'tables', GlitchTextExtension()])
         
         # Check if conference GIF exists
         gif_html = ""
@@ -836,8 +879,8 @@ footer {
             pdf_filename = f"{paper.folder_name}.pdf"
             pdf_link = f'<a href="../pdfs/{pdf_filename}" class="btn">Download Final PDF</a>'
         
-        # Convert abstract markdown to HTML
-        abstract_html = markdown.markdown(paper.abstract)
+        # Convert abstract markdown to HTML (use ../ since we're in papers/ subdirectory)
+        abstract_html = markdown.markdown(paper.abstract, extensions=[GlitchTextExtension(base_path='../')])
         
         content = f"""
         <div class="paper-details">
