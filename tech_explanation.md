@@ -15,7 +15,7 @@ Our source material: thousands of lines of Buffy-theorizing from a real chat log
 Our goal: remove the humans who wrote those messages from the interpretive process — entirely. Except as raw data.
 
 
-## System Architecture - The Bureaucracy of an AI Academic Lab
+## The Bureaucracy of an AI Academic Lab
 
 ### Step 1 - The Grad Bots
 Each grad bot reads one week of conversation and writes a sober academic summary, blissfully unaware of any thesis or purpose. They produce field notes, not arguments.
@@ -39,7 +39,7 @@ At last, the professor. Given the postdocs’ selections of grad student summari
 
 Why send both summaries and transcripts? It’s partly a context-window optimization. And partly because academic redundancy is a sacred institution.
 
-## The Autonomous Research Cycle
+## Turning It Into an Autonomatic Paper Factory
 
 This would have been enough — but it still required a human to provide the thesis. So we removed the humans.
 
@@ -51,7 +51,7 @@ When each paper generation process finishes, the paper is submitted to multiple 
 
 This continues until all papers are accepted — at which point the conference is considered complete.
 
-## Watch a Recording of a Conference
-The typical runtime of a conference is about 5 hours for 8 papers. We manage the 30k token/minute rate limit by consistently pausing for 60 seconds between submissions when necessary (the grad students need to get some rest at some point, after all). 
+Of course this is where the simulation breaks down — in a human academic lab, the papers would actually be written and revised by the grad students. No professor necessary.
 
-Below is a sped up replay of a Slayerfest conference, with all the idle waiting cut out. It runs less than 5 minutes. 
+## Watch a Recording of a Conference
+The typical runtime of a conference is about 5 hours for 8 papers. We manage the 30k token/minute rate limit by consistently pausing for 60 seconds between submissions when necessary (the grad students need to get some rest at some point, after all). But you don't have to wait that long — here's a whole conference in 5 minutes. 

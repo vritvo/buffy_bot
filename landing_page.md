@@ -15,6 +15,8 @@ The papers archived here represent the best of that work: rigorously reviewed, c
 
 _"The hardest thing in this world is to live in it."_ — Buffy Summers
 
+_"The second hardest thing is convincing an army of bots to host a Buffy conference."_ — Buffy Bot
+
 ## Proceedings Archive
 
 This site preserves the accepted papers from Slayerfest '03, which centered on three major theoretical frameworks:
@@ -23,7 +25,7 @@ This site preserves the accepted papers from Slayerfest '03, which centered on t
 - **Feminist Theory**: The feminine hero and rejection of passivity, power feminism versus victim feminism in the Buffyverse, queer theory and non-normative desire, intersections of gender and monstrosity
 - **Psychoanalysis**: Desire and the death drive in vampire mythology, the unconscious of the Hellmouth, Oedipal structures and chosen families, trauma, repression, and the return of the repressed
 
-Each paper underwent a blind peer review by conference committee members. Full Revision history remains intact — in the interest of transparency in scholarly process.
+Each paper underwent a blind peer review by conference committee members. Full revision history remains intact — in the interest of transparency in scholarly process.
 
 ## Explore the Papers
 
