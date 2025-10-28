@@ -191,6 +191,39 @@ class PaperFolder:
         
         return ""
     
+    def _extract_episodes(self) -> List[Tuple[int, int]]:
+        """Extract episode references from title and abstract in format SxEE (e.g., 3x11, 7x02)
+        
+        Returns:
+            List of (season, episode) tuples found in the title and abstract
+        """
+        episodes = []
+        text = f"{self.title} {self.abstract}"
+        
+        # Pattern matches formats like 3x11, 7x02, 1x01, etc.
+        pattern = r'(\d+)x(\d+)'
+        matches = re.finditer(pattern, text)
+        
+        for match in matches:
+            season = int(match.group(1))
+            episode = int(match.group(2))
+            episodes.append((season, episode))
+        
+        return episodes
+    
+    def get_latest_episode(self) -> Optional[Tuple[int, int]]:
+        """Get the latest episode mentioned in this paper (highest season, then highest episode)
+        
+        Returns:
+            Tuple of (season, episode) or None if no episodes found
+        """
+        episodes = self._extract_episodes()
+        if not episodes:
+            return None
+        
+        # Sort by season first, then episode, and return the highest
+        return max(episodes, key=lambda ep: (ep[0], ep[1]))
+    
     def get_base_paper_series(self) -> str:
         """Get the base paper series name (without versions)"""
         return re.sub(r'(_v\d+)+$', '', self.base_name)
@@ -258,8 +291,19 @@ class StaticSiteGenerator:
                     console.print(f"[yellow]Warning: No accepted version found for '{series}', using latest version[/yellow]")
                     self.papers.append(versions[0])
         
-        # Sort papers by title
-        self.papers.sort(key=lambda p: p.title)
+        # Sort papers by episode order
+        # Papers with episodes come first (sorted by season, then episode)
+        # Papers without episodes come last (sorted by title)
+        def episode_sort_key(paper):
+            latest_ep = paper.get_latest_episode()
+            if latest_ep:
+                # Return (0, season, episode, title) for papers with episodes
+                return (0, latest_ep[0], latest_ep[1], paper.title)
+            else:
+                # Return (1, 0, 0, title) for papers without episodes (1 puts them at end)
+                return (1, 0, 0, paper.title)
+        
+        self.papers.sort(key=episode_sort_key)
         
         console.print(f"[green]Found {len(self.papers)} final papers[/green]")
     
