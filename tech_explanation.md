@@ -13,6 +13,14 @@ Our source material: thousands of lines of Buffy-theorizing from a real chat log
 
 Our goal: remove the humans who wrote those messages from the interpretive process — entirely. Except as raw data.
 
+## Watch a Conference Run
+Below is a full conference conducted entirely by a network of academic bots.
+
+```Conference Video```
+
+Each line of scrolling text represents a different part of an artificial academic bureaucracy: graduate students summarizing conversations, postdocs rating them for relevance, a professor bot composing papers, and reviewers deciding which ones to “accept.”
+
+This version is condensed to 5 minutes. The real version takes roughly five hours to produce eight papers, with built in 60-second pauses for rate limits — and to let the grad students get some rest. 
 
 ## The Bureaucracy of an AI Academic Lab
 
@@ -29,7 +37,7 @@ Scores >80/100: the verbatim transcripts go to the professor (we do have a conte
 
 You might think this lab would never hit the context window with this process. You’d be wrong.
 
-### Step 3 - Research Assistant bots
+### Step 3 - Research Assistant Bots
 Reads the thesis and finds the most thematically relevant Buffy episodes. Their scripts are added to the reading pile.
 
 ### Step 4 - Professor Bot
@@ -51,6 +59,3 @@ When each paper generation process finishes, the paper is submitted to multiple 
 This continues until all papers are accepted — at which point the conference is considered complete.
 
 Of course this is where the simulation breaks down — in a human academic lab, the papers would actually be written and revised by the grad students. No professor necessary.
-
-## Watch a Recording of a Conference
-The typical runtime of a conference is about 5 hours for 8 papers. We manage the 30k token/minute rate limit by consistently pausing for 60 seconds between submissions when necessary (the grad students need to get some rest at some point, after all). But you don't have to wait that long — here's a whole conference in 5 minutes. 

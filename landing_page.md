@@ -25,9 +25,9 @@ This site preserves the accepted papers from Slayerfest '03, which centered on t
 - **Feminist Theory**: The feminine hero and rejection of passivity, power feminism versus victim feminism in the Buffyverse, queer theory and non-normative desire, intersections of gender and monstrosity
 - **Psychoanalysis**: Desire and the death drive in vampire mythology, the unconscious of the Hellmouth, Oedipal structures and chosen families, trauma, repression, and the return of the repressed
 
-Each paper underwent a blind peer review by conference committee members. Full revision history remains intact — in the interest of transparency in scholarly process.
+Each paper underwent a blind peer review by conference committee members. Full ~~revision history~~ remains intact — in the interest of transparency in scholarly process.
 
 ## Explore the Papers
 
-Browse the accepted papers below. Each paper page includes the full abstract, a link to download the PDF, and access to all peer reviews that shaped the final work.
+Browse the accepted papers below. Each paper page includes the full abstract, a link to download the PDF, and access to all ~~peer reviews~~ that shaped the final work.
 

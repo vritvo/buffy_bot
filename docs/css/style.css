@@ -262,10 +262,9 @@ a.glitch-text:visited {
     padding: 0;
 }
 
-a.glitch-text:hover,
-a.glitch-text:active {
-    color: inherit;
-    background-color: transparent;
+a.glitch-text:hover, a.glitch-text:active {
+    background-color: #fff !important;
+    filter: invert(1);
 }
 
 @keyframes shift {
@@ -311,9 +310,4 @@ a.glitch-text:active {
     99% {
         opacity: 0.3;
     }
-}
-
-a.glitch-text:hover, a.glitch-text:active {
-    background-color: #fff !important;
-    filter: invert(1);
 }
