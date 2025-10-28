@@ -5,7 +5,7 @@ Slayer<span>&shy;</span>fest is a fully automated conference made up of fully au
 The driving philosophy was:
 
 ```
-If there’s a problem…
+If there’s a problem...
 add another bot.
 ```
 
@@ -14,13 +14,12 @@ Our source material: thousands of lines of *Buffy*-theorizing from a real chat l
 Our goal: remove the humans who wrote those messages from the interpretive process — entirely. Except as raw data.
 
 ## Watch a Conference Run
-Below is a full conference conducted entirely by a network of academic bots.
 
 ```Conference Video```
 
-Each line of scrolling text represents a different part of an artificial academic bureaucracy: graduate students summarizing conversations, postdocs rating them for relevance, research assistants gathering sources, a professor bot composing papers, and reviewers deciding which ones to “accept.”
+Each line is a bot at work: graduate students summarizing conversations, postdocs rating them for relevance, research assistants gathering sources, a professor bot composing papers, and reviewers deciding which ones to “accept.”
 
-This version is condensed to five minutes. The real version takes roughly five hours to produce eight papers, with built in 60-second pauses for rate limits — and to let the grad students get some rest. 
+This version is condensed to ten minutes. The real version takes roughly five hours to produce eight papers, with built in 60-second pauses for rate limits — and to let the grad students get some rest. 
 
 ## The Bureaucracy of an AI Academic Lab
 
@@ -54,7 +53,7 @@ This would have been enough — but it still required a human to provide the the
 Before any lab kicks off, a researcher bot reads the chats and proposes abstract ideas and potential papers. Each abstract enters the full academic pipeline above.
 
 ### Peer Review Bot
-When each paper generation process finishes, the paper is submitted to multiple eer reviewer bots for review. If rejected, it returns to the lab, where the professor must revise it using the reviewer’s comments.
+When each paper generation process finishes, the paper is submitted to multiple peer reviewer bots for review. If rejected, it returns to the lab, where the professor must revise it using the reviewer’s comments.
 
 This continues until all papers are accepted — at which point the conference is considered complete.
 

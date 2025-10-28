@@ -26,46 +26,49 @@ console = Console()
 
 class GlitchTextInlineProcessor(InlineProcessor):
     """Inline processor to convert ~~text~~ to <a class="glitch-text">text</a>"""
-    
-    def __init__(self, pattern, md, base_path=''):
+
+    def __init__(self, pattern, md, base_path=""):
         super().__init__(pattern, md)
         self.base_path = base_path
-    
+
     def handleMatch(self, m, data):
-        el = etree.Element('a')
-        el.set('class', 'glitch-text')
+        el = etree.Element("a")
+        el.set("class", "glitch-text")
         # Set href to technical documentation page
-        tech_page = f'{self.base_path}technical_documentation.html'
-        el.set('href', tech_page)
+        tech_page = f"{self.base_path}technical_documentation.html"
+        el.set("href", tech_page)
         # Add random delay between 0.1s and 0.9s
         delay = random.uniform(0.1, 0.9)
         # Add random flicker duration between 7s and 11s
         flicker_duration = random.uniform(7.0, 11.0)
         # Add random shift duration between 9s and 13s
         shift_duration = random.uniform(9.0, 13.0)
-        el.set('style', f'--delay: {delay:.2f}s; --flicker-duration: {flicker_duration:.2f}s; --shift-duration: {shift_duration:.2f}s')
+        el.set(
+            "style",
+            f"--delay: {delay:.2f}s; --flicker-duration: {flicker_duration:.2f}s; --shift-duration: {shift_duration:.2f}s",
+        )
         el.text = m.group(1)
         return el, m.start(0), m.end(0)
 
 
 class GlitchTextExtension(Extension):
     """Extension to add GlitchTextInlineProcessor to markdown"""
-    
-    def __init__(self, base_path=''):
+
+    def __init__(self, base_path=""):
         super().__init__()
         self.base_path = base_path
-    
+
     def extendMarkdown(self, md):
-        # Pattern matches ~~text~~ 
-        GLITCH_PATTERN = r'~~(.*?)~~'
+        # Pattern matches ~~text~~
+        GLITCH_PATTERN = r"~~(.*?)~~"
         glitch_pattern = GlitchTextInlineProcessor(GLITCH_PATTERN, md, self.base_path)
         # Register with high priority to process before other patterns
-        md.inlinePatterns.register(glitch_pattern, 'glitch_text', 175)
+        md.inlinePatterns.register(glitch_pattern, "glitch_text", 175)
 
 
 class PaperFolder:
     """Represents a paper folder with metadata and file paths"""
-    
+
     def __init__(self, folder_path: Path):
         self.path = folder_path
         self.folder_name = folder_path.name
@@ -76,210 +79,218 @@ class PaperFolder:
         self.reviews = self._find_reviews()
         self.title = self._extract_title()
         self.abstract = self._extract_abstract()
-        
+
     def _parse_folder_name(self) -> Tuple[str, str]:
         """Parse folder name into timestamp and base name"""
-        match = re.match(r'(\d{8}_\d{6})_(.+)', self.folder_name)
+        match = re.match(r"(\d{8}_\d{6})_(.+)", self.folder_name)
         if match:
             return match.group(1), match.group(2)
         return "", self.folder_name
-    
+
     def _extract_version(self) -> int:
         """Extract version number from base name (e.g., _v2_v2 -> 2)"""
-        version_count = self.base_name.count('_v')
+        version_count = self.base_name.count("_v")
         return version_count
-    
+
     def _get_base_paper_name(self) -> str:
         """Get the base paper name without version suffixes"""
         # Remove all _v2, _v2_v2 type suffixes
-        base = re.sub(r'(_v\d+)+$', '', self.base_name)
+        base = re.sub(r"(_v\d+)+$", "", self.base_name)
         return base
-    
+
     def _find_paper_md(self) -> Optional[Path]:
         """Find the paper markdown file"""
         # Look for paper files in various naming patterns
-        patterns = ['paper*.md', '*.md']
+        patterns = ["paper*.md", "*.md"]
         for pattern in patterns:
             matches = list(self.path.glob(pattern))
             if matches:
                 # Prefer files with 'paper' in the name
-                paper_files = [m for m in matches if 'paper' in m.name.lower()]
+                paper_files = [m for m in matches if "paper" in m.name.lower()]
                 if paper_files:
                     return paper_files[0]
                 return matches[0]
         return None
-    
+
     def _find_paper_pdf(self) -> Optional[Path]:
         """Find the paper PDF file (prioritize scanned versions ending in _scan.pdf)"""
         # First, try to find scanned PDFs (aged versions)
-        scan_matches = list(self.path.glob('*_scan.pdf'))
+        scan_matches = list(self.path.glob("*_scan.pdf"))
         if scan_matches:
             return scan_matches[0]
-        
+
         # If no scanned PDFs found, return None (only use scanned versions for the conference site)
         return None
-    
+
     def _find_reviews(self) -> List[Path]:
         """Find all review JSON files"""
-        reviews_dir = self.path / 'reviews'
+        reviews_dir = self.path / "reviews"
         if reviews_dir.exists():
-            return sorted(reviews_dir.glob('*.json'))
+            return sorted(reviews_dir.glob("*.json"))
         return []
-    
+
     def _extract_title(self) -> str:
         """Extract title from paper markdown frontmatter"""
         if not self.paper_md or not self.paper_md.exists():
             return self._humanize_title(self.base_name)
-        
+
         try:
-            with open(self.paper_md, 'r') as f:
+            with open(self.paper_md, "r") as f:
                 content = f.read()
                 # Look for YAML frontmatter
-                if content.startswith('---'):
-                    frontmatter_end = content.find('---', 3)
+                if content.startswith("---"):
+                    frontmatter_end = content.find("---", 3)
                     if frontmatter_end > 0:
                         frontmatter = content[3:frontmatter_end]
-                        for line in frontmatter.split('\n'):
-                            if line.startswith('title:'):
-                                title = line.split('title:', 1)[1].strip().strip('"\'')
+                        for line in frontmatter.split("\n"):
+                            if line.startswith("title:"):
+                                title = line.split("title:", 1)[1].strip().strip("\"'")
                                 return title
-                
+
                 # Look for first heading
-                for line in content.split('\n'):
-                    if line.startswith('# '):
-                        return line.lstrip('# ').strip()
+                for line in content.split("\n"):
+                    if line.startswith("# "):
+                        return line.lstrip("# ").strip()
         except Exception as e:
-            console.print(f"[yellow]Warning: Could not extract title from {self.paper_md}: {e}[/yellow]")
-        
+            console.print(
+                f"[yellow]Warning: Could not extract title from {self.paper_md}: {e}[/yellow]"
+            )
+
         return self._humanize_title(self.base_name)
-    
+
     def _humanize_title(self, text: str) -> str:
         """Convert folder name to readable title"""
         # Remove version suffixes
-        text = re.sub(r'(_v\d+)+$', '', text)
+        text = re.sub(r"(_v\d+)+$", "", text)
         # Replace underscores with spaces
-        text = text.replace('_', ' ')
+        text = text.replace("_", " ")
         return text
-    
+
     def _extract_abstract(self) -> str:
         """Extract abstract from paper markdown"""
         if not self.paper_md or not self.paper_md.exists():
             return ""
-        
+
         try:
-            with open(self.paper_md, 'r') as f:
+            with open(self.paper_md, "r") as f:
                 content = f.read()
-                
+
                 # Skip frontmatter
-                if content.startswith('---'):
-                    frontmatter_end = content.find('---', 3)
+                if content.startswith("---"):
+                    frontmatter_end = content.find("---", 3)
                     if frontmatter_end > 0:
-                        content = content[frontmatter_end + 3:]
-                
+                        content = content[frontmatter_end + 3 :]
+
                 # Look for Abstract section
-                abstract_pattern = r'#{1,3}\s*Abstract\s*\n\n(.*?)(?=\n#{1,3}|\Z)'
+                abstract_pattern = r"#{1,3}\s*Abstract\s*\n\n(.*?)(?=\n#{1,3}|\Z)"
                 match = re.search(abstract_pattern, content, re.DOTALL | re.IGNORECASE)
                 if match:
                     abstract = match.group(1).strip()
                     # Remove scratchpad if present
-                    if '<scratchpad>' in abstract:
-                        abstract = abstract.split('<scratchpad>')[0].strip()
+                    if "<scratchpad>" in abstract:
+                        abstract = abstract.split("<scratchpad>")[0].strip()
                     return abstract
-                
+
         except Exception as e:
-            console.print(f"[yellow]Warning: Could not extract abstract from {self.paper_md}: {e}[/yellow]")
-        
+            console.print(
+                f"[yellow]Warning: Could not extract abstract from {self.paper_md}: {e}[/yellow]"
+            )
+
         return ""
-    
+
     def _extract_episodes(self) -> List[Tuple[int, int]]:
         """Extract episode references from title and abstract in format SxEE (e.g., 3x11, 7x02)
-        
+
         Returns:
             List of (season, episode) tuples found in the title and abstract
         """
         episodes = []
         text = f"{self.title} {self.abstract}"
-        
+
         # Pattern matches formats like 3x11, 7x02, 1x01, etc.
-        pattern = r'(\d+)x(\d+)'
+        pattern = r"(\d+)x(\d+)"
         matches = re.finditer(pattern, text)
-        
+
         for match in matches:
             season = int(match.group(1))
             episode = int(match.group(2))
             episodes.append((season, episode))
-        
+
         return episodes
-    
+
     def get_latest_episode(self) -> Optional[Tuple[int, int]]:
         """Get the latest episode mentioned in this paper (highest season, then highest episode)
-        
+
         Returns:
             Tuple of (season, episode) or None if no episodes found
         """
         episodes = self._extract_episodes()
         if not episodes:
             return None
-        
+
         # Sort by season first, then episode, and return the highest
         return max(episodes, key=lambda ep: (ep[0], ep[1]))
-    
+
     def get_base_paper_series(self) -> str:
         """Get the base paper series name (without versions)"""
-        return re.sub(r'(_v\d+)+$', '', self.base_name)
-    
+        return re.sub(r"(_v\d+)+$", "", self.base_name)
+
     def is_accepted(self) -> bool:
         """Check if this paper has all reviews marked as ACCEPT"""
         if not self.reviews:
             return False
-        
+
         try:
             for review_path in self.reviews:
-                with open(review_path, 'r') as f:
+                with open(review_path, "r") as f:
                     review_data = json.load(f)
-                    decision = review_data.get('metadata', {}).get('decision', '')
-                    if decision != 'ACCEPT':
+                    decision = review_data.get("metadata", {}).get("decision", "")
+                    if decision != "ACCEPT":
                         return False
             return True
         except Exception as e:
-            console.print(f"[yellow]Warning: Could not check acceptance status for {self.path}: {e}[/yellow]")
+            console.print(
+                f"[yellow]Warning: Could not check acceptance status for {self.path}: {e}[/yellow]"
+            )
             return False
 
 
 class StaticSiteGenerator:
     """Generates static HTML site from conference papers"""
-    
-    def __init__(self, papers_dir: Path, output_dir: Path, svg_file: Optional[Path] = None):
+
+    def __init__(
+        self, papers_dir: Path, output_dir: Path, svg_file: Optional[Path] = None
+    ):
         self.papers_dir = papers_dir
         self.output_dir = output_dir
         self.svg_file = svg_file
         self.svg_content: Optional[str] = None
         self.papers: List[PaperFolder] = []
         self.paper_series: Dict[str, List[PaperFolder]] = {}  # Track all versions
-        
+
         # Load SVG content if provided
         if svg_file and svg_file.exists():
             self.svg_content = svg_file.read_text()
-        
+
     def scan_papers(self):
         """Scan papers directory and identify final accepted versions"""
         console.print("[cyan]Scanning papers directory...[/cyan]")
-        
+
         all_folders = [f for f in self.papers_dir.iterdir() if f.is_dir()]
         all_papers = [PaperFolder(f) for f in all_folders]
-        
+
         # Group by base paper series
         for paper in all_papers:
             series = paper.get_base_paper_series()
             if series not in self.paper_series:
                 self.paper_series[series] = []
             self.paper_series[series].append(paper)
-        
+
         # For each series, find the highest version that's accepted
         for series, versions in self.paper_series.items():
             # Sort by version number (highest first)
             versions.sort(key=lambda p: p.version, reverse=True)
-            
+
             # Find first accepted version
             for paper in versions:
                 if paper.is_accepted():
@@ -288,9 +299,11 @@ class StaticSiteGenerator:
             else:
                 # If no accepted version, take the latest version
                 if versions:
-                    console.print(f"[yellow]Warning: No accepted version found for '{series}', using latest version[/yellow]")
+                    console.print(
+                        f"[yellow]Warning: No accepted version found for '{series}', using latest version[/yellow]"
+                    )
                     self.papers.append(versions[0])
-        
+
         # Sort papers by episode order
         # Papers with episodes come first (sorted by season, then episode)
         # Papers without episodes come last (sorted by title)
@@ -302,54 +315,67 @@ class StaticSiteGenerator:
             else:
                 # Return (1, 0, 0, title) for papers without episodes (1 puts them at end)
                 return (1, 0, 0, paper.title)
-        
+
         self.papers.sort(key=episode_sort_key)
-        
+
         console.print(f"[green]Found {len(self.papers)} final papers[/green]")
-    
-    def generate_site(self, landing_md: Optional[Path], tech_md: Optional[Path], custom_css: Optional[Path] = None):
+
+    def generate_site(
+        self,
+        landing_md: Optional[Path],
+        tech_md: Optional[Path],
+        custom_css: Optional[Path] = None,
+    ):
         """Generate complete static site"""
         console.print("\n[cyan]Generating static site...[/cyan]")
-        
+
         # Validate required markdown files
         if not landing_md or not landing_md.exists():
-            console.print(f"[red]Error: Landing page markdown file not found: {landing_md}[/red]")
-            raise FileNotFoundError(f"Landing page markdown file required but not found: {landing_md}")
-        
+            console.print(
+                f"[red]Error: Landing page markdown file not found: {landing_md}[/red]"
+            )
+            raise FileNotFoundError(
+                f"Landing page markdown file required but not found: {landing_md}"
+            )
+
         if not tech_md or not tech_md.exists():
-            console.print(f"[red]Error: Technical documentation markdown file not found: {tech_md}[/red]")
-            raise FileNotFoundError(f"Technical documentation markdown file required but not found: {tech_md}")
-        
+            console.print(
+                f"[red]Error: Technical documentation markdown file not found: {tech_md}[/red]"
+            )
+            raise FileNotFoundError(
+                f"Technical documentation markdown file required but not found: {tech_md}"
+            )
+
         # Validate custom CSS if provided
         if custom_css and not custom_css.exists():
             console.print(f"[red]Error: Custom CSS file not found: {custom_css}[/red]")
             raise FileNotFoundError(f"Custom CSS file not found: {custom_css}")
-        
+
         # Create output directory structure
         self.output_dir.mkdir(exist_ok=True)
-        (self.output_dir / 'papers').mkdir(exist_ok=True)
-        (self.output_dir / 'iterations').mkdir(exist_ok=True)
-        (self.output_dir / 'pdfs').mkdir(exist_ok=True)
-        (self.output_dir / 'css').mkdir(exist_ok=True)
-        
+        (self.output_dir / "papers").mkdir(exist_ok=True)
+        (self.output_dir / "iterations").mkdir(exist_ok=True)
+        (self.output_dir / "pdfs").mkdir(exist_ok=True)
+        (self.output_dir / "css").mkdir(exist_ok=True)
+
         # Generate or copy CSS
         self._generate_css(custom_css)
-        
+
         # Copy fonts directory if it exists
         self._copy_fonts_directory()
-        
+
         # Copy favicon directory if it exists
         self._copy_favicon_directory()
-        
-        # Copy gifs directory if it exists
-        self._copy_gifs_directory()
-        
+
+        # Copy videos directory if it exists
+        self._copy_videos_directory()
+
         # Generate landing page
         self._generate_landing_page(landing_md)
-        
+
         # Generate tech documentation
         self._generate_tech_page(tech_md)
-        
+
         # Generate paper pages and copy all versions
         for paper in self.papers:
             # Get all versions for this paper series
@@ -357,32 +383,34 @@ class StaticSiteGenerator:
             all_versions = self.paper_series.get(series_name, [paper])
             # Sort by version (lowest first for chronological order)
             all_versions.sort(key=lambda p: p.version)
-            
+
             self._generate_paper_page(paper, all_versions)
-            
+
             # Copy PDFs for all versions
             for version in all_versions:
                 self._copy_paper_pdf(version)
-            
+
             # Generate iteration pages
             self._generate_iteration_pages(paper, all_versions)
-        
-        console.print(f"\n[green]✓ Site generated successfully in {self.output_dir}[/green]")
-    
+
+        console.print(
+            f"\n[green]✓ Site generated successfully in {self.output_dir}[/green]"
+        )
+
     def _generate_css(self, custom_css: Optional[Path] = None):
         """Generate CSS stylesheet or copy custom CSS file
-        
+
         Args:
             custom_css: Optional path to custom CSS file. If provided, copies this file
                        instead of generating the default CSS.
         """
-        css_output_path = self.output_dir / 'css' / 'style.css'
-        
+        css_output_path = self.output_dir / "css" / "style.css"
+
         if custom_css:
             console.print(f"[cyan]Using custom CSS: {custom_css}[/cyan]")
             shutil.copy2(custom_css, css_output_path)
             return
-        
+
         console.print("[cyan]Generating default CSS...[/cyan]")
         css = """
 * {
@@ -718,108 +746,124 @@ footer {
     }
 }
 """
-        css_path = self.output_dir / 'css' / 'style.css'
+        css_path = self.output_dir / "css" / "style.css"
         css_path.write_text(css)
-    
+
     def _copy_fonts_directory(self):
         """Copy fonts directory to output directory if it exists"""
-        fonts_dir = Path('fonts')
-        
+        fonts_dir = Path("fonts")
+
         if not fonts_dir.exists():
-            console.print("[yellow]Warning: fonts directory not found, skipping font copy[/yellow]")
+            console.print(
+                "[yellow]Warning: fonts directory not found, skipping font copy[/yellow]"
+            )
             return
-        
-        output_fonts_dir = self.output_dir / 'fonts'
-        
+
+        output_fonts_dir = self.output_dir / "fonts"
+
         if output_fonts_dir.exists():
             # Remove existing fonts directory to ensure clean copy
             shutil.rmtree(output_fonts_dir)
-        
+
         console.print("[cyan]Copying fonts directory...[/cyan]")
         shutil.copytree(fonts_dir, output_fonts_dir)
         console.print(f"[green]✓ Copied fonts directory to {output_fonts_dir}[/green]")
-    
+
     def _copy_favicon_directory(self):
         """Copy favicon directory to output directory if it exists"""
-        favicon_dir = Path('favicon')
-        
+        favicon_dir = Path("favicon")
+
         if not favicon_dir.exists():
-            console.print("[yellow]Warning: favicon directory not found, skipping favicon copy[/yellow]")
+            console.print(
+                "[yellow]Warning: favicon directory not found, skipping favicon copy[/yellow]"
+            )
             return
-        
-        output_favicon_dir = self.output_dir / 'favicon'
-        
+
+        output_favicon_dir = self.output_dir / "favicon"
+
         if output_favicon_dir.exists():
             # Remove existing favicon directory to ensure clean copy
             shutil.rmtree(output_favicon_dir)
-        
+
         console.print("[cyan]Copying favicon directory...[/cyan]")
         shutil.copytree(favicon_dir, output_favicon_dir)
-        
+
         # Update site.webmanifest to use correct paths
-        manifest_path = output_favicon_dir / 'site.webmanifest'
+        manifest_path = output_favicon_dir / "site.webmanifest"
         if manifest_path.exists():
             import json as json_module
-            with open(manifest_path, 'r') as f:
+
+            with open(manifest_path, "r") as f:
                 manifest = json_module.load(f)
-            
+
             # Update icon paths to be relative to the favicon directory
-            if 'icons' in manifest:
-                for icon in manifest['icons']:
-                    if 'src' in icon and icon['src'].startswith('/'):
-                        icon['src'] = 'favicon' + icon['src']
-            
-            with open(manifest_path, 'w') as f:
+            if "icons" in manifest:
+                for icon in manifest["icons"]:
+                    if "src" in icon and icon["src"].startswith("/"):
+                        icon["src"] = "favicon" + icon["src"]
+
+            with open(manifest_path, "w") as f:
                 json_module.dump(manifest, f, indent=2)
-        
-        console.print(f"[green]✓ Copied favicon directory to {output_favicon_dir}[/green]")
-    
-    def _copy_gifs_directory(self):
-        """Copy gifs directory to output directory if it exists"""
-        # First check in docs/gifs
-        gifs_dir = Path('docs/gifs')
-        
-        if not gifs_dir.exists():
-            # Fall back to gifs directory at root
-            gifs_dir = Path('gifs')
-            if not gifs_dir.exists():
-                console.print("[yellow]Warning: gifs directory not found, skipping gifs copy[/yellow]")
-                return
-        
-        output_gifs_dir = self.output_dir / 'gifs'
-        
-        # Skip if source and destination are the same
-        if gifs_dir.resolve() == output_gifs_dir.resolve():
-            console.print("[yellow]Skipping gifs directory (already in output directory)[/yellow]")
+
+        console.print(
+            f"[green]✓ Copied favicon directory to {output_favicon_dir}[/green]"
+        )
+
+    def _copy_videos_directory(self):
+        """Copy videos directory to output directory if it exists"""
+
+        videos_dir = Path("videos")
+        if not videos_dir.exists():
+            console.print(
+                "[yellow]Warning: videos directory not found, skipping videos copy[/yellow]"
+            )
             return
-        
-        if output_gifs_dir.exists():
-            # Remove existing gifs directory to ensure clean copy
-            shutil.rmtree(output_gifs_dir)
-        
-        console.print("[cyan]Copying gifs directory...[/cyan]")
-        shutil.copytree(gifs_dir, output_gifs_dir)
-        console.print(f"[green]✓ Copied gifs directory to {output_gifs_dir}[/green]")
-    
+
+        output_videos_dir = self.output_dir / "videos"
+
+        # Skip if source and destination are the same
+        if videos_dir.resolve() == output_videos_dir.resolve():
+            console.print(
+                "[yellow]Skipping videos directory (already in output directory)[/yellow]"
+            )
+            return
+
+        if output_videos_dir.exists():
+            # Remove existing videos directory to ensure clean copy
+            shutil.rmtree(output_videos_dir)
+
+        console.print("[cyan]Copying videos directory...[/cyan]")
+        shutil.copytree(videos_dir, output_videos_dir)
+        console.print(f"[green]✓ Copied videos directory to {output_videos_dir}[/green]")
+
     def _generate_landing_page(self, landing_md: Path):
         """Generate landing page"""
         console.print("[cyan]Generating landing page...[/cyan]")
-        
+
         # Read landing page content and convert to HTML
-        landing_content = markdown.markdown(landing_md.read_text(), extensions=[GlitchTextExtension()])
-        
+        landing_content = markdown.markdown(
+            landing_md.read_text(), extensions=[GlitchTextExtension()]
+        )
+
         # Insert "Read more" link to technical documentation after first paragraph
         # Split content into paragraphs and insert link after first </p>
-        first_p_end = landing_content.find('</p>')
+        first_p_end = landing_content.find("</p>")
         if first_p_end != -1:
             tech_link = '\n<p><a href="technical_documentation.html" class="inline-link">Read more</a></p>'
-            landing_content = landing_content[:first_p_end] + landing_content[first_p_end:first_p_end+4] + tech_link + landing_content[first_p_end+4:]
-        
+            landing_content = (
+                landing_content[:first_p_end]
+                + landing_content[first_p_end : first_p_end + 4]
+                + tech_link
+                + landing_content[first_p_end + 4 :]
+            )
+
         # Generate paper list
         papers_html = '<div class="paper-grid">'
         for paper in self.papers:
             # Convert abstract markdown to HTML
-            abstract_html = markdown.markdown(paper.abstract, extensions=[GlitchTextExtension()])
+            abstract_html = markdown.markdown(
+                paper.abstract, extensions=[GlitchTextExtension()]
+            )
             papers_html += f"""
             <div class="paper-card">
                 <h3>{paper.title}</h3>
@@ -827,8 +871,8 @@ footer {
                 <a href="papers/{paper.folder_name}.html" class="read-more">Read more →</a>
             </div>
             """
-        papers_html += '</div>'
-        
+        papers_html += "</div>"
+
         html = self._wrap_html(
             title="Conference Papers",
             content=f"""
@@ -838,29 +882,37 @@ footer {
             
             <h2 class="papers-heading">Accepted Papers</h2>
             {papers_html}
-            """
+            """,
         )
-        
-        (self.output_dir / 'index.html').write_text(html)
-    
+
+        (self.output_dir / "index.html").write_text(html)
+
     def _generate_tech_page(self, tech_md: Path):
         """Generate technical documentation page"""
         console.print("[cyan]Generating technical documentation...[/cyan]")
-        
-        content = markdown.markdown(tech_md.read_text(), extensions=['fenced_code', 'tables', GlitchTextExtension()])
-        
-        # Check if conference GIF exists and replace "Conference Video" placeholder
-        gif_path = Path('docs/gifs/conference_run.gif')
-        if not gif_path.exists():
-            gif_path = Path('gifs/conference_run.gif')
-        
-        if gif_path.exists():
-            gif_html = """<div style="margin-top: 40px; margin-bottom: 40px; text-align: center;">
-                <img src="gifs/conference_run.gif" alt="Conference Run Recording" style="max-width: 100%; border: 1px solid #ddd; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
-            </div>"""
-            # Replace the code block containing "Conference Video" with the GIF
-            content = re.sub(r'<code>Conference Video</code>', gif_html, content)
-        
+
+        content = markdown.markdown(
+            tech_md.read_text(),
+            extensions=["fenced_code", "tables", GlitchTextExtension()],
+        )
+
+        # Check if conference Video exists and replace "Conference Video" placeholder
+        video_path = Path("docs/videos/conference_run.webm")
+        if not video_path.exists():
+            video_path = Path("videos/conference_run.webm")
+
+        if video_path.exists():
+            video_html = """<div>
+                <video controls loop muted autoplay playbackRate="4">
+                    <source src="videos/conference_run.webm" type="video/webm">
+                </video>
+                    </div>"""
+
+                    
+                
+            # Replace the code block containing "Conference Video" with the Video
+            content = re.sub(r"<code>Conference Video</code>", video_html, content)
+
         html = self._wrap_html(
             title="Technical Documentation",
             content=f"""
@@ -871,39 +923,43 @@ footer {
                 <a href="/" class="btn secondary">← Back to Conference</a>
             </div>
             """,
-            css_path="css/style.css"
+            css_path="css/style.css",
         )
-        
-        (self.output_dir / 'technical_documentation.html').write_text(html)
-    
+
+        (self.output_dir / "technical_documentation.html").write_text(html)
+
     def _generate_paper_page(self, paper: PaperFolder, all_versions: List[PaperFolder]):
         """Generate individual paper page with review iterations"""
         console.print(f"[cyan]Generating page for: {paper.title}[/cyan]")
-        
+
         # Generate iterations section
         iterations_html = '<div class="reviews-list"><h3>Review Iterations</h3>'
-        
+
         for iteration_num, version in enumerate(all_versions, 1):
             if not version.reviews:
                 continue
-            
+
             # Determine overall decision for this iteration
             all_accept = True
             try:
                 for review_path in version.reviews:
-                    with open(review_path, 'r') as f:
+                    with open(review_path, "r") as f:
                         review_data = json.load(f)
-                        decision = review_data.get('metadata', {}).get('decision', 'UNKNOWN')
-                        if decision != 'ACCEPT':
+                        decision = review_data.get("metadata", {}).get(
+                            "decision", "UNKNOWN"
+                        )
+                        if decision != "ACCEPT":
                             all_accept = False
                             break
             except Exception as e:
-                console.print(f"[yellow]Warning: Could not read reviews for version {version.folder_name}: {e}[/yellow]")
+                console.print(
+                    f"[yellow]Warning: Could not read reviews for version {version.folder_name}: {e}[/yellow]"
+                )
                 all_accept = False
-            
+
             overall_decision = "ACCEPT" if all_accept else "REJECT"
             decision_class = "accept" if all_accept else "reject"
-            
+
             iterations_html += f"""
             <div class="review-item">
                 <a href="../iterations/{paper.get_base_paper_series()}_iteration_{iteration_num}.html">
@@ -912,18 +968,22 @@ footer {
                 <span class="decision {decision_class}">{overall_decision}</span>
             </div>
             """
-        
-        iterations_html += '</div>'
-        
+
+        iterations_html += "</div>"
+
         # Generate links
         pdf_link = ""
         if paper.paper_pdf:
             pdf_filename = f"{paper.folder_name}.pdf"
-            pdf_link = f'<a href="../pdfs/{pdf_filename}" class="btn">Download Final PDF</a>'
-        
+            pdf_link = (
+                f'<a href="../pdfs/{pdf_filename}" class="btn">Download Final PDF</a>'
+            )
+
         # Convert abstract markdown to HTML (use ../ since we're in papers/ subdirectory)
-        abstract_html = markdown.markdown(paper.abstract, extensions=[GlitchTextExtension(base_path='../')])
-        
+        abstract_html = markdown.markdown(
+            paper.abstract, extensions=[GlitchTextExtension(base_path="../")]
+        )
+
         content = f"""
         <div class="paper-details">
             <h1>{paper.title}</h1>
@@ -941,97 +1001,103 @@ footer {
             {iterations_html}
         </div>
         """
-        
+
         html = self._wrap_html(
-            title=paper.title,
-            content=content,
-            css_path="../css/style.css"
+            title=paper.title, content=content, css_path="../css/style.css"
         )
-        
-        output_path = self.output_dir / 'papers' / f'{paper.folder_name}.html'
+
+        output_path = self.output_dir / "papers" / f"{paper.folder_name}.html"
         output_path.write_text(html)
-    
+
     def _copy_paper_pdf(self, paper: PaperFolder):
         """Copy paper PDF to output directory"""
         if paper.paper_pdf and paper.paper_pdf.exists():
-            dest = self.output_dir / 'pdfs' / f'{paper.folder_name}.pdf'
+            dest = self.output_dir / "pdfs" / f"{paper.folder_name}.pdf"
             shutil.copy2(paper.paper_pdf, dest)
-    
-    def _generate_iteration_pages(self, final_paper: PaperFolder, all_versions: List[PaperFolder]):
+
+    def _generate_iteration_pages(
+        self, final_paper: PaperFolder, all_versions: List[PaperFolder]
+    ):
         """Generate pages for each review iteration showing all reviews for that iteration"""
         base_series = final_paper.get_base_paper_series()
-        
+
         for iteration_num, version in enumerate(all_versions, 1):
             if not version.reviews:
                 continue
-            
-            console.print(f"[cyan]Generating iteration {iteration_num} page for: {final_paper.title}[/cyan]")
-            
+
+            console.print(
+                f"[cyan]Generating iteration {iteration_num} page for: {final_paper.title}[/cyan]"
+            )
+
             # Determine overall decision
             all_accept = True
             try:
                 for review_path in version.reviews:
-                    with open(review_path, 'r') as f:
+                    with open(review_path, "r") as f:
                         review_data = json.load(f)
-                        decision = review_data.get('metadata', {}).get('decision', 'UNKNOWN')
-                        if decision != 'ACCEPT':
+                        decision = review_data.get("metadata", {}).get(
+                            "decision", "UNKNOWN"
+                        )
+                        if decision != "ACCEPT":
                             all_accept = False
                             break
             except Exception:
                 all_accept = False
-            
+
             overall_decision = "ACCEPT" if all_accept else "REJECT"
-            
+
             # Generate reviews HTML for this iteration
             reviews_html = f"""
             <h2>Iteration {iteration_num}: {overall_decision}</h2>
             <p class="iteration-info">This iteration contains {len(version.reviews)} review(s).</p>
             """
-            
+
             # Add each review
             for review_idx, review_path in enumerate(version.reviews, 1):
                 try:
-                    with open(review_path, 'r') as f:
+                    with open(review_path, "r") as f:
                         review_data = json.load(f)
-                    
-                    metadata = review_data.get('metadata', {})
-                    review = review_data.get('review', {})
-                    
-                    decision = metadata.get('decision', 'UNKNOWN')
-                    
+
+                    metadata = review_data.get("metadata", {})
+                    review = review_data.get("review", {})
+
+                    decision = metadata.get("decision", "UNKNOWN")
+
                     reviews_html += f"""
                     <div class="review-content">
                         <h3>Reviewer {review_idx}</h3>
                         
-                        <p><strong>Decision:</strong> <span class="decision {'accept' if decision == 'ACCEPT' else 'reject'}">{decision}</span></p>
+                        <p><strong>Decision:</strong> <span class="decision {"accept" if decision == "ACCEPT" else "reject"}">{decision}</span></p>
                         
                         <h4>Overall Assessment</h4>
-                        <p>{review.get('overall_assessment', 'N/A')}</p>
+                        <p>{review.get("overall_assessment", "N/A")}</p>
                         
                         <h4>Strengths</h4>
                         <ul>
-                        {''.join(f'<li>{s}</li>' for s in review.get('strengths', []))}
+                        {"".join(f"<li>{s}</li>" for s in review.get("strengths", []))}
                         </ul>
                         
                         <h4>Weaknesses</h4>
                         <ul>
-                        {''.join(f'<li>{w}</li>' for w in review.get('weaknesses', []))}
+                        {"".join(f"<li>{w}</li>" for w in review.get("weaknesses", []))}
                         </ul>
                         
                         <h4>Detailed Comments</h4>
-                        <p>{review.get('detailed_comments', 'N/A')}</p>
+                        <p>{review.get("detailed_comments", "N/A")}</p>
                     </div>
                     """
-                    
+
                 except Exception as e:
-                    console.print(f"[red]Error processing review {review_path}: {e}[/red]")
-            
+                    console.print(
+                        f"[red]Error processing review {review_path}: {e}[/red]"
+                    )
+
             # Add link to the PDF that was reviewed
             pdf_link = ""
             if version.paper_pdf:
                 pdf_filename = f"{version.folder_name}.pdf"
                 pdf_link = f'<a href="../pdfs/{pdf_filename}" class="btn">Download Reviewed Paper (Iteration {iteration_num})</a>'
-            
+
             # Wrap in complete page structure
             content = f"""
             <div class="iteration-details">
@@ -1044,35 +1110,39 @@ footer {
                 </div>
             </div>
             """
-            
+
             html = self._wrap_html(
                 title=f"Iteration {iteration_num} - {final_paper.title}",
                 content=content,
-                css_path="../css/style.css"
+                css_path="../css/style.css",
             )
-            
-            output_path = self.output_dir / 'iterations' / f'{base_series}_iteration_{iteration_num}.html'
+
+            output_path = (
+                self.output_dir
+                / "iterations"
+                / f"{base_series}_iteration_{iteration_num}.html"
+            )
             output_path.write_text(html)
-    
+
     def _generate_review_pages(self, paper: PaperFolder):
         """Generate individual review pages"""
         for i, review_path in enumerate(paper.reviews, 1):
             try:
-                with open(review_path, 'r') as f:
+                with open(review_path, "r") as f:
                     review_data = json.load(f)
-                
-                metadata = review_data.get('metadata', {})
-                review = review_data.get('review', {})
-                
-                decision = metadata.get('decision', 'UNKNOWN')
-                reviewed_at = metadata.get('reviewed_at', '')
-                
+
+                metadata = review_data.get("metadata", {})
+                review = review_data.get("review", {})
+
+                decision = metadata.get("decision", "UNKNOWN")
+                reviewed_at = metadata.get("reviewed_at", "")
+
                 # Add link to the PDF that was reviewed
                 pdf_link = ""
                 if paper.paper_pdf:
                     pdf_filename = f"{paper.folder_name}.pdf"
                     pdf_link = f'<a href="../pdfs/{pdf_filename}" class="btn">Download Reviewed Paper</a>'
-                
+
                 # Format review content
                 review_html = f"""
                 <div class="review-content">
@@ -1082,20 +1152,20 @@ footer {
                     <p><strong>Reviewed:</strong> {reviewed_at}</p>
                     
                     <h2>Overall Assessment</h2>
-                    <p>{review.get('overall_assessment', 'N/A')}</p>
+                    <p>{review.get("overall_assessment", "N/A")}</p>
                     
                     <h2>Strengths</h2>
                     <ul>
-                    {''.join(f'<li>{s}</li>' for s in review.get('strengths', []))}
+                    {"".join(f"<li>{s}</li>" for s in review.get("strengths", []))}
                     </ul>
                     
                     <h2>Weaknesses</h2>
                     <ul>
-                    {''.join(f'<li>{w}</li>' for w in review.get('weaknesses', []))}
+                    {"".join(f"<li>{w}</li>" for w in review.get("weaknesses", []))}
                     </ul>
                     
                     <h2>Detailed Comments</h2>
-                    <p>{review.get('detailed_comments', 'N/A')}</p>
+                    <p>{review.get("detailed_comments", "N/A")}</p>
                     
                     <div class="links">
                         {pdf_link}
@@ -1103,44 +1173,56 @@ footer {
                     </div>
                 </div>
                 """
-                
+
                 html = self._wrap_html(
                     title=f"Review #{i} - {paper.title}",
                     content=review_html,
-                    css_path="../css/style.css"
+                    css_path="../css/style.css",
                 )
-                
+
                 review_id = review_path.stem
-                output_path = self.output_dir / 'reviews' / f'{paper.folder_name}_{review_id}.html'
+                output_path = (
+                    self.output_dir
+                    / "reviews"
+                    / f"{paper.folder_name}_{review_id}.html"
+                )
                 output_path.write_text(html)
-                
+
             except Exception as e:
-                console.print(f"[red]Error generating review page for {review_path}: {e}[/red]")
-    
-    def _wrap_html(self, title: str, content: str, css_path: str = "css/style.css") -> str:
+                console.print(
+                    f"[red]Error generating review page for {review_path}: {e}[/red]"
+                )
+
+    def _wrap_html(
+        self, title: str, content: str, css_path: str = "css/style.css"
+    ) -> str:
         """Wrap content in HTML template
-        
+
         Args:
             title: Page title
             content: HTML content for the page
             css_path: Relative path to CSS file (default: 'css/style.css' for root pages,
                      use '../css/style.css' for pages in subdirectories)
         """
-        
+
         # Include SVG as first child of body if provided
         svg_html = f"\n    {self.svg_content}" if self.svg_content else ""
-        
+
         # Determine favicon path based on css_path depth
         # If css_path starts with '../', we're in a subdirectory
         favicon_base = "../favicon" if css_path.startswith("../") else "favicon"
-        tech_page = "../technical_documentation.html" if css_path.startswith("../") else "technical_documentation.html"
-        
+        tech_page = (
+            "../technical_documentation.html"
+            if css_path.startswith("../")
+            else "technical_documentation.html"
+        )
+
         # Generate random values for Buffy Bot glitch effect
         delay = random.uniform(0.1, 0.9)
         flicker_duration = random.uniform(7.0, 11.0)
         shift_duration = random.uniform(9.0, 13.0)
-        glitch_style = f'--delay: {delay:.2f}s; --flicker-duration: {flicker_duration:.2f}s; --shift-duration: {shift_duration:.2f}s'
-        
+        glitch_style = f"--delay: {delay:.2f}s; --flicker-duration: {flicker_duration:.2f}s; --shift-duration: {shift_duration:.2f}s"
+
         return f"""<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -1171,56 +1253,90 @@ footer {
 
 
 @click.command()
-@click.option('--papers-dir', default='papers', help='Path to papers directory (default: papers)')
-@click.option('--output-dir', default='conference_site', help='Output directory for static site (default: conference_site)')
-@click.option('--landing-page', default='landing_page.md', help='Markdown file for landing page content (required, default: landing_page.md)')
-@click.option('--tech-docs', default='tech_explanation.md', help='Markdown file for technical documentation (required, default: tech_explanation.md)')
-@click.option('--custom-css', default=None, help='Optional custom CSS file to use instead of default styling')
-@click.option('--svg-file', default=None, help='Optional SVG file to include as first child of body in each page')
-def generate_site(papers_dir: str, output_dir: str, landing_page: str, tech_docs: str, custom_css: str, svg_file: str):
+@click.option(
+    "--papers-dir", default="papers", help="Path to papers directory (default: papers)"
+)
+@click.option(
+    "--output-dir",
+    default="conference_site",
+    help="Output directory for static site (default: conference_site)",
+)
+@click.option(
+    "--landing-page",
+    default="landing_page.md",
+    help="Markdown file for landing page content (required, default: landing_page.md)",
+)
+@click.option(
+    "--tech-docs",
+    default="tech_explanation.md",
+    help="Markdown file for technical documentation (required, default: tech_explanation.md)",
+)
+@click.option(
+    "--custom-css",
+    default=None,
+    help="Optional custom CSS file to use instead of default styling",
+)
+@click.option(
+    "--svg-file",
+    default=None,
+    help="Optional SVG file to include as first child of body in each page",
+)
+def generate_site(
+    papers_dir: str,
+    output_dir: str,
+    landing_page: str,
+    tech_docs: str,
+    custom_css: str,
+    svg_file: str,
+):
     """Generate static website from conference paper folders
-    
+
     Both landing-page and tech-docs markdown files are required.
     The generator will fail if either file is missing.
-    
+
     Optionally provide a custom CSS file with --custom-css to override the default styling.
     Optionally provide an SVG file with --svg-file to include as the first child of body in each page.
     """
-    
-    console.print("[bold cyan]Static Site Generator for Conference Papers[/bold cyan]\n")
-    
+
+    console.print(
+        "[bold cyan]Static Site Generator for Conference Papers[/bold cyan]\n"
+    )
+
     papers_path = Path(papers_dir)
     output_path = Path(output_dir)
     landing_path = Path(landing_page)
     tech_path = Path(tech_docs)
     custom_css_path = Path(custom_css) if custom_css else None
     svg_path = Path(svg_file) if svg_file else None
-    
+
     if not papers_path.exists():
-        console.print(f"[red]Error: Papers directory '{papers_dir}' does not exist[/red]")
+        console.print(
+            f"[red]Error: Papers directory '{papers_dir}' does not exist[/red]"
+        )
         return
-    
+
     # Validate SVG file if provided
     if svg_path and not svg_path.exists():
         console.print(f"[red]Error: SVG file not found: {svg_path}[/red]")
         return
-    
+
     # Create generator
     generator = StaticSiteGenerator(papers_path, output_path, svg_path)
-    
+
     # Scan papers
     generator.scan_papers()
-    
+
     # Generate site (will fail if markdown files are missing)
     try:
         generator.generate_site(landing_path, tech_path, custom_css_path)
         console.print("\n[green]✓ Static site generated successfully![/green]")
-        console.print(f"[blue]Open {output_path / 'index.html'} in your browser to view the site[/blue]")
+        console.print(
+            f"[blue]Open {output_path / 'index.html'} in your browser to view the site[/blue]"
+        )
     except FileNotFoundError as e:
         console.print(f"\n[red]✗ Failed to generate site: {e}[/red]")
         return
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     generate_site()
-

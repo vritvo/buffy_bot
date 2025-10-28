@@ -331,3 +331,8 @@ a.glitch-text:hover, a.glitch-text:active {
         opacity: 0.3;
     }
 }
+
+video {
+    max-width: 100%;
+    height: auto;
+}
