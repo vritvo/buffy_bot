@@ -20,7 +20,7 @@ Below is a full conference conducted entirely by a network of academic bots.
 
 Each line of scrolling text represents a different part of an artificial academic bureaucracy: graduate students summarizing conversations, postdocs rating them for relevance, a professor bot composing papers, and reviewers deciding which ones to “accept.”
 
-This version is condensed to 5 minutes. The real version takes roughly five hours to produce eight papers, with built in 60-second pauses for rate limits — and to let the grad students get some rest. 
+This version is condensed to five minutes. The real version takes roughly five hours to produce eight papers, with built in 60-second pauses for rate limits — and to let the grad students get some rest. 
 
 ## The Bureaucracy of an AI Academic Lab
 
