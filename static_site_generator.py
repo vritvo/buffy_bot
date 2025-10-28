@@ -824,7 +824,7 @@ footer {
                 {content}
             </div>
             <div class="links">
-                <a href="index.html" class="btn secondary">← Back to Conference</a>
+                <a href="/" class="btn secondary">← Back to Conference</a>
             </div>
             """,
             css_path="css/style.css"
@@ -891,7 +891,7 @@ footer {
             
             <div class="links">
                 {pdf_link}
-                <a href="../index.html" class="btn secondary">← Back to Conference</a>
+                <a href="/" class="btn secondary">← Back to Conference</a>
             </div>
             
             {iterations_html}
