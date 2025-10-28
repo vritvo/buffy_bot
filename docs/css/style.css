@@ -129,10 +129,8 @@ h3::after {
     background-color: black;
 }
 
-h1,
 h2,
-h3,
-ul {
+h3 {
     text-wrap: balance;
 }
 
