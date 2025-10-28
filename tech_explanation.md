@@ -42,7 +42,7 @@ Reads the thesis and finds the most thematically relevant *Buffy* episodes. Thei
 
 ### Step 4 - Professor Bot
 
-At last, the professor. Given the postdocs’ selections of grad student summaries and ver batim chats, as well as the the RA’s episodes, the professor composes an academic paper. It is authoritative, theoretical, and unbothered by the fact that its “sources” are two people texting about *Buffy*.
+At last, the professor. Given the postdocs’ selections of grad student summaries and verbatim chats, as well as the the RA’s episodes, the professor composes an academic paper. It is authoritative, theoretical, and unbothered by the fact that its “sources” are two people texting about *Buffy*.
 
 Why send both summaries and transcripts? It’s partly a context-window optimization. And partly because academic redundancy is a sacred institution.
 
