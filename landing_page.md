@@ -1,10 +1,10 @@
-# Slayerfest '03: The Academic Symposium on Buffy Studies
+# Slayer<span>&shy;</span>fest '03: The Academic Symposium on *Buffy* Studies
 
 ## In every generation there is a conference.
 
-**May 16-18, 2003 | University of California, Sunnydale, CA**
+**May 16-18, 2003 | University of California, ~~Sunnydale~~, CA**
 
-## About Slayerfest '03
+## About Slayer<span>&shy;</span>fest '03
 
 For seven seasons, _Buffy_ has offered more than monster-of-the-week entertainment. It has staged fundamental questions about existential responsibility, the construction of feminine heroism, and the unconscious forces that shape identity and desire. Slayerfest '03 brought together leading scholars to interrogate these themes with the seriousness they deserve.
 
@@ -15,7 +15,7 @@ The papers archived here represent the best of that work: rigorously reviewed, c
 
 _"The hardest thing in this world is to live in it."_ — Buffy Summers
 
-_"The second hardest thing is convincing an ~~army of bots~~ to host a Buffy conference."_ — ~~Buffy Bot~~
+_"The second hardest thing is convincing an ~~army of bots~~ to host a Buffy conference."_ — Buffy Bot
 
 ## Proceedings Archive
 

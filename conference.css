@@ -30,6 +30,22 @@
     font-display: block;
 }
 
+@font-face {
+    font-family: Xanh Mono;
+    src: url('../fonts/XanhMono-Regular.ttf');
+    font-weight: 400;
+    font-style: normal;
+    font-display: block;
+}
+
+@font-face {
+    font-family: Xanh Mono;
+    src: url('../fonts/XanhMono-Italic.ttf');
+    font-weight: 400;
+    font-style: italic;
+    font-display: block;
+}
+
 :root {
     --color-yellow: #ffe100;
     --line-thickness: 2pt;
@@ -37,6 +53,7 @@
 
 html {
     scroll-behavior: smooth;
+    hyphens: auto;
 }
 
 body {
@@ -81,6 +98,9 @@ h2,
 h3 {
     font-weight: 700;
     font-style: normal;
+    overflow-wrap: break-word;
+    word-wrap: break-word;
+    font-family: "Xanh Mono", monospace;
 }
 
 h1 {
@@ -187,6 +207,7 @@ a:not([href*='//']):visited {
     /* to keep the padding consistent for line breaks: */
     -webkit-box-decoration-break: clone;
     box-decoration-break: clone;
+    font-family: "Xanh Mono", monospace;
 
     &:hover,
     &:active {
@@ -260,6 +281,7 @@ a.glitch-text:visited {
     text-decoration: none;
     background-color: transparent;
     padding: 0;
+    font-family: "Nimbus Mono", monospace;
 }
 
 a.glitch-text:hover, a.glitch-text:active {
@@ -275,7 +297,7 @@ a.glitch-text:hover, a.glitch-text:active {
     31%,
     69%,
     93% {
-        text-shadow: 2px 0 #00000000, -2px 0 #00000000;
+        text-shadow: 2px 2px #00000000, -2px -2px #00000000;
     }
 
     6%,
@@ -284,7 +306,7 @@ a.glitch-text:hover, a.glitch-text:active {
     30%,
     70%,
     91% {
-        text-shadow: 2px 0 #ff00ff, -2px 0 #3afdfd;
+        text-shadow: 2px 2px #ff00ff, -2px -2px #3afdfd;
     }
 }
 
