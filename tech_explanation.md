@@ -49,10 +49,10 @@ Why send both summaries and transcripts? It’s partly a context-window optimiza
 
 This would have been enough — but it still required a human to provide the thesis. So we removed the humans.
 
-### Researcher Bot 
+### Step 5 - Researcher Bot 
 Before any lab kicks off, a researcher bot reads the chats and proposes abstract ideas and potential papers. Each abstract enters the full academic pipeline above.
 
-### Peer Review Bot
+### Step 6 - Peer Review Bot
 When each paper generation process finishes, the paper is submitted to multiple peer reviewer bots for review. If rejected, it returns to the lab, where the professor must revise it using the reviewer’s comments.
 
 This continues until all papers are accepted — at which point the conference is considered complete.
