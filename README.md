@@ -7,7 +7,9 @@
 
 Slayerfest / Buffy Bot is a performance art codebase disguised as an academic workflow. It runs a full AI conference — complete with grad students, post docs, peer reviewers, and professors — all bots, no humans (except the original chat log they're sourcing from).
 
-The multi-agent system is fully vibe-coded. It ingests thousands of lines of *Buffy* discussion from a real conversation, runs it through a bureacratic multi-agent process, and outputs a "conference proceeding" website with papers, reviews, and revision histories. 
+It ingests thousands of lines of *Buffy* discussion from a real conversation, runs it through a bureacratic multi-agent process, and outputs a "conference proceeding" website with papers, reviews, and revision histories. 
+
+The multi-agent system is fully vibe coded. It has a lot of redundancy in it. But so does academia. 
 
 | Bot           | Description                               |
 | -----------   | ------------------------------------------|
@@ -19,9 +21,14 @@ The multi-agent system is fully vibe-coded. It ingests thousands of lines of *Bu
 |Peer Reviewer Bots   |Review and force revisions until all papers are accepted|
 
 
-You can also learn more about what each bot does on the technical documentation page of the website [here](https://slayerfest.org/technical_documentation).
+You can also learn more about what each bot does on the technical documentation page of the conference website [here](https://slayerfest.org/technical_documentation).
 
-Each conference run automatically produces papers, reviews, and versioned filenames with increasing chaos (e.g. `paper_FINAL_v2_copy3.md`).
+Each conference run automatically produces papers, reviews, and randomly versioned filenames (e.g. `paper_FINAL_v2_copy3.md`).
+
+A full conference can take many hours, because there are many 60 second breaks baked in to manage the 20,000 token/min rate limit. Below is a sped up 10 minute version of the bots at work, with all the rests cut out: 
+
+<img src="./videos/conference_run.gif" alt="Conference Run" width="400">
+
 
 ## How to Run A Conference
 ### 1. Set up
@@ -36,7 +43,7 @@ ZULIP_RECIPIENT=other-person@example.com #email of the other person in the 1:1 c
 CLAUDE_API_KEY=your-claude-api-key
 ```
 
-This project uses `uv` for dependency management. You can synv with:
+This project uses `uv` for dependency management. You can sync with:
 
 ```
 uv sync
@@ -68,10 +75,6 @@ There are some key commands for `run-conference`, which may significantly impact
 --max-scripts: Episode scripts to include (default: 5)
 --verbatim-chat-threshold: Rating for using verbatim transcripts (default: 70)
 
-A full conference can take many hours, because there are many 60 second breaks baked in to manage the rate limits. Below is a 10 minute version of the bots-at-work, with all the rests cut out: 
-
-<img src="./videos/conference_run.gif" alt="Conference Run" width="400">
-
 ## Website
 
 Once the papers are ready: 
@@ -80,16 +83,8 @@ Once the papers are ready:
 uv run python static_site_generator.py 
 ```
 
-This takes source files and builds the website from it. 
+This takes source files and builds the website from it. You may want to point to a specific paper directory with the option `--papers-dir` (default `papers`)
 
-Key options:
-
---papers-dir: Path to papers directory (default: papers)
---output-dir: Output directory for static site (default: conference_site)
---landing-page: Markdown file for landing page content (required, default: landing_page.md)
---tech-docs: Markdown file for technical documentation (required, default: tech_explanation.md)
---svg-file: svg file for website overlay
---custom-css: Optional custom CSS file to use instead of default styling
 
 ## Other Options
 
@@ -97,7 +92,7 @@ There are some other options here that let you run parts of the pipeline, withou
 
 
 ```
-# 1. Extract and run gard student steps above
+# 1. Extract and run grad student steps above
 # 2. Generate paper (auto-runs postdoc bot + research assistant + professor bot)
 uv run main.py generate-paper --topic "Your paper topic"
 ```

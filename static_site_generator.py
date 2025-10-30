@@ -1258,7 +1258,7 @@ footer {
 )
 @click.option(
     "--output-dir",
-    default="conference_site",
+    default="docs",
     help="Output directory for static site (default: conference_site)",
 )
 @click.option(
@@ -1273,12 +1273,12 @@ footer {
 )
 @click.option(
     "--custom-css",
-    default=None,
+    default="conference.css",
     help="Optional custom CSS file to use instead of default styling",
 )
 @click.option(
     "--svg-file",
-    default=None,
+    default="conference_filter.svg",
     help="Optional SVG file to include as first child of body in each page",
 )
 def generate_site(
