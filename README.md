@@ -1,11 +1,11 @@
 # Slayerfest '03 The Buffy Bot Conference
 
-**Website** https://slayerfest.org
-**Summary** Fully automated AI academic conference on *Buffy the Vampire Slayer*
-**Collaborators** Built with [Frederic Kettelhoit](https://github.com/fkettelhoit/)
+* **Website** https://slayerfest.org
+* **Summary** Fully automated AI academic conference on *Buffy the Vampire Slayer*
+* **Collaborators** Built with [Frederic Kettelhoit](https://github.com/fkettelhoit/)
 ## What This is
 
-Slayerfest / Buffy Bot is a performance art codebase disguised as an academic workflow. It runs a full AI conference — complete with grad students, post docs, peer reviewers, and professors — all bots, no humans (except the original chat log they're sourcing from).
+Slayerfest is fictional academic conference about *Buffy the Vampire Slayer*. It runs a full AI academic workflow — complete with grad students, post docs, peer reviewers, and professors — all bots, no humans (except the original chat log they're sourcing from).
 
 It ingests thousands of lines of *Buffy* discussion from a real conversation, runs it through a bureacratic multi-agent process, and outputs a "conference proceeding" website with papers, reviews, and revision histories. 
 
