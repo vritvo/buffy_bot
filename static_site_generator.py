@@ -874,7 +874,7 @@ footer {
         papers_html += "</div>"
 
         html = self._wrap_html(
-            title="Conference Papers",
+            title="Slayerfest",
             content=f"""
             <div class="markdown-content">
                 {landing_content}
